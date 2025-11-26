@@ -10,7 +10,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@0.263.1"></script>
     
-    <!-- 🔥 Firebase SDK (Compat version for simple HTML usage) -->
+    <!-- 🔥 Firebase SDK (Compat) -->
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
@@ -33,21 +33,22 @@
 
         // ---------------------------------------------------------
         // 🔥 [필수] Firebase 설정 값을 여기에 붙여넣으세요
-        // Firebase 콘솔 -> 프로젝트 설정 -> 내 앱 -> SDK 설정 및 구성
+        // Firebase 콘솔 > 프로젝트 설정 > 내 앱 > SDK 설정 및 구성 에서 복사
         // ---------------------------------------------------------
         const firebaseConfig = {
-            apiKey: "API_KEY_를_입력하세요",
-            authDomain: "project-id.firebaseapp.com",
-            projectId: "project-id",
-            storageBucket: "project-id.appspot.com",
-            messagingSenderId: "00000000000",
-            appId: "1:00000000:web:0000000000"
+              apiKey: "AIzaSyDsuxadED3xkBeGf2X2caD2ZWXG0qaSVqc",
+              authDomain: "movie-45532.firebaseapp.com",
+              projectId: "movie-45532",
+              storageBucket: "movie-45532.firebasestorage.app",
+              messagingSenderId: "734371910812",
+              appId: "1:734371910812:web:b2bad9c351529dbf054959",
+              measurementId: "G-S3XL65W4G0"
         };
 
-        // Firebase 초기화 (설정값이 있을 때만)
+        // Firebase 초기화
         let auth = null;
         try {
-            if (firebaseConfig.apiKey !== "API_KEY_를_입력하세요") {
+            if (firebaseConfig.apiKey !== "여기에_API_KEY를_붙여넣으세요") {
                 firebase.initializeApp(firebaseConfig);
                 auth = firebase.auth();
             }
@@ -90,36 +91,36 @@
             date.setMonth(date.getMonth() + months);
             return date.toISOString().split('T')[0];
         };
+        // 화/금 자동 보정 함수
         const getNextTueOrFri = (dateStr) => {
             if(!dateStr) return '';
             const date = new Date(dateStr);
-            let day = date.getDay(); 
+            let day = date.getDay(); // 0:일 ~ 6:토
             let add = 0;
             if (day === 2 || day === 5) return dateStr; 
-            if (day < 2) add = 2 - day; 
-            else if (day < 5) add = 5 - day; 
-            else add = (2 + 7) - day; 
+            if (day < 2) add = 2 - day; // 일(0),월(1) -> 화(2)
+            else if (day < 5) add = 5 - day; // 수(3),목(4) -> 금(5)
+            else add = (2 + 7) - day; // 토(6) -> 다음주 화(2)
             date.setDate(date.getDate() + add);
             return date.toISOString().split('T')[0];
         };
         const getDuration = (start, end) => {
-            if (!start || !end || end === '9999-12-31') return '';
+            if (!start || !end || end.startsWith('9999')) return '';
             const s = new Date(start);
             const e = new Date(end);
             const diffTime = Math.abs(e - s);
             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
-            return `(${diffDays + 1}일)`;
+            return `(${diffDays + 1}일)`; 
         };
 
         // --- Main Component ---
         const AdvancedAdminDashboard = () => {
-            const [user, setUser] = useState(null); // Firebase User State
+            const [user, setUser] = useState(null); 
             const [isLoggedIn, setIsLoggedIn] = useState(false);
             const [loginEmail, setLoginEmail] = useState("");
             const [loginPw, setLoginPw] = useState("");
             const [loginError, setLoginError] = useState(null);
 
-            // Data States
             const [data, setData] = useState([
                 { 
                     id: 8963, title: "데빌 인사이드", cp: "이놀미디어", category: "해외영화", 
@@ -130,7 +131,6 @@
                 }
             ]);
             const [requests, setRequests] = useState([]);
-            
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [currentMode, setCurrentMode] = useState('add');
@@ -152,9 +152,9 @@
             };
             const [formData, setFormData] = useState(initialForm);
 
-            // Init & Auth Listener
             useEffect(() => {
-                setGeminiApiKey(localStorage.getItem('gemini_api_key') || '');
+                const savedKey = localStorage.getItem('gemini_api_key');
+                if (savedKey) setGeminiApiKey(savedKey);
                 const savedUrl = localStorage.getItem('google_script_url');
                 if(savedUrl) setGoogleScriptUrl(savedUrl);
 
@@ -167,32 +167,23 @@
                 }
             }, []);
 
-            // Login Handler
             const handleLogin = async (e) => {
                 e.preventDefault();
                 setLoginError(null);
-                
                 if (!auth) {
-                    // Fallback for test if firebase not configured
-                    if(loginEmail === 'admin' && loginPw === '1234') {
-                        setIsLoggedIn(true);
+                    // TEST LOGIN (If Firebase not set)
+                    if (loginEmail === 'admin' && loginPw === '1234') {
                         setUser({ email: 'admin@test.com' });
+                        setIsLoggedIn(true);
                         return;
                     }
-                    setLoginError("Firebase 설정이 필요합니다. (코드 내 firebaseConfig 확인)");
+                    setLoginError("Firebase 설정 값을 코드에 입력해주세요.");
                     return;
                 }
-
                 try {
                     await auth.signInWithEmailAndPassword(loginEmail, loginPw);
                 } catch (error) {
-                    let msg = "로그인 실패";
-                    if (error.code === 'auth/invalid-credential' || error.code === 'auth/user-not-found' || error.code === 'auth/wrong-password') {
-                        msg = "아이디 또는 비밀번호가 잘못되었습니다.";
-                    } else if (error.code === 'auth/too-many-requests') {
-                        msg = "접속 시도가 너무 많습니다. 잠시 후 다시 시도해주세요.";
-                    }
-                    setLoginError(msg);
+                    setLoginError("로그인 실패: 이메일/비밀번호를 확인하세요.");
                 }
             };
 
@@ -219,7 +210,7 @@
                         const p2 = policies[j];
                         if (p1.mode === p2.mode) {
                             if (p1.startDate <= p2.endDate && p1.endDate >= p2.startDate) {
-                                return `[${p1.mode === 'RENTAL' ? '대여' : '소장'}] 정책 간 기간이 겹칩니다.\n(${p1.type}: ${p1.startDate}~${p1.endDate}) vs (${p2.type}: ${p2.startDate}~${p2.endDate})`;
+                                return `[${p1.mode === 'RENTAL' ? '대여' : '소장'}] 정책 간 기간이 겹칩니다.\n(${p1.type} vs ${p2.type})`;
                             }
                         }
                     }
@@ -268,7 +259,7 @@
                 
                 const result = await callGemini(prompt, geminiApiKey);
                 if (result.error) {
-                    alert(`AI 오류: ${result.error}\n설정에서 API 키가 유효한지 확인해주세요.`);
+                    alert(`AI 오류: ${result.error}\nAPI 키를 확인하세요.`);
                 } else if (result.text) {
                     try {
                         const jsonMatch = result.text.match(/\{[\s\S]*\}/);
@@ -276,44 +267,69 @@
                             const jsonStr = jsonMatch[0];
                             const res = JSON.parse(jsonStr);
                             setFormData(prev => ({ ...prev, ...res }));
-                        } else { throw new Error("JSON 형식 없음"); }
+                        } else { throw new Error("JSON 파싱 실패"); }
                     } catch (e) { console.error(e); alert("AI 응답을 해석할 수 없습니다."); }
                 }
                 setIsAiLoading(false);
             };
 
+            // --- 🚀 고도화된 자동 스케줄링 로직 ---
             const applyAutoHoldback = (baseDate, mode) => {
                 if (!baseDate) return;
                 
                 const existingPolicies = formData.pricingPolicy.filter(p => p.mode !== mode);
+                const cpName = formData.cp || "";
+
+                // 1. 기준일 = EPVOD 시작일 (Base Date)
                 const epvodStart = baseDate;
-                const epvodEnd = addDays(epvodStart, 27); 
+                const epvodEnd = addDays(epvodStart, 27); // +27일
+                
+                // 2. PVOD: EPVOD 종료일 + 1일 ~ EPVOD 시작일 + 89일
                 const pvodStart = addDays(epvodEnd, 1);
-                const pvodEnd = addDays(epvodStart, 89); 
+                const pvodEnd = addDays(epvodStart, 89); // 원칙: EPVOD 시작일(base) + 89일
+                
+                // 3. RVOD: PVOD 종료일 + 1일 ~ +179일 (RVOD 시작일 + 179일로 가정)
                 const rvodStart = addDays(pvodEnd, 1);
+                const rvodEnd = addDays(rvodStart, 179); 
                 
                 let newPolicies = [];
 
                 if (mode === "RENTAL") {
+                    // SPVOD 제외, EPVOD(7000) -> PVOD(5000) -> RVOD(2500)
                     newPolicies = [
                         { mode: "RENTAL", type: "EPVOD", price: 7000, startDate: epvodStart, endDate: epvodEnd },
                         { mode: "RENTAL", type: "PVOD", price: 5000, startDate: pvodStart, endDate: pvodEnd },
                         { mode: "RENTAL", type: "RVOD", price: 2500, startDate: rvodStart, endDate: "9999-12-31" }
                     ];
                 } else {
+                    // 소장: EPVOD(15000) -> PVOD(10000)
                     newPolicies = [
                         { mode: "POSSESSION", type: "EPVOD", price: 15000, startDate: epvodStart, endDate: epvodEnd },
                         { mode: "POSSESSION", type: "PVOD", price: 10000, startDate: pvodStart, endDate: "9999-12-31" }
                     ];
                 }
 
+                // --- B tv+ Avail Calculation (Holdback Logic) ---
                 let newBtvData = {};
-                if (mode === "RENTAL") { 
-                    const cp = formData.cp || "";
-                    let btvBase = epvodStart; 
-                    let availDate = btvBase;
-                    if (cp.includes("CJ ENM")) availDate = addMonths(btvBase, 9);
-                    else if (["롯데 엔터", "쇼박스", "콘텐츠판다", "케이티알파", "롯데"].some(c => cp.includes(c))) availDate = addDays(btvBase, 42);
+                if (mode === "RENTAL") { // 대여 스케줄링 시 함께 계산
+                    let btvBaseDate = epvodStart; // 기본: EPVOD 시작일 기준
+
+                    // 예외: 스튜디오산타는 PVOD 시작일 기준
+                    if (cpName.includes("스튜디오산타")) {
+                        btvBaseDate = pvodStart;
+                    }
+
+                    let availDate = btvBaseDate; // 기본: 동시
+                    
+                    if (cpName.includes("CJ ENM")) {
+                        // CJ ENM: 9개월 후
+                        availDate = addMonths(btvBaseDate, 9);
+                    } else if (["롯데 엔터", "쇼박스", "콘텐츠판다", "케이티알파", "롯데"].some(c => cpName.includes(c))) {
+                        // 특정 CP: 6주(+42일) 후
+                        availDate = addDays(btvBaseDate, 42);
+                    }
+                    
+                    // 실제 편성은 화/금 보정
                     newBtvData = {
                         btvPlusStatus: 'Y',
                         btvPlusAvailableDate: availDate,
@@ -348,7 +364,7 @@
                                 {loginError && <div className="text-red-500 text-sm">{loginError}</div>}
                                 <button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded font-bold hover:bg-indigo-700 transition">로그인</button>
                             </form>
-                            {!auth && <div className="mt-4 text-xs text-gray-400 text-center">Firebase 미설정 시: admin / 1234</div>}
+                            {!auth && <div className="mt-4 text-xs text-gray-400 text-center">Firebase 미설정 시 테스트: admin / 1234</div>}
                         </div>
                     </div>
                 );
