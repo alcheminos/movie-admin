@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Admin Pro (Debug Mode)</title>
+    <title>Movie Admin Pro (Final Text Mode)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -57,13 +57,31 @@
             }
         } catch (e) { console.error("Firebase Init Error:", e); }
 
-        // 🛠️ [DATE FIX] KST(한국 표준시) 강제 변환 함수 (시간/분/초 제거)
+        // 🛠️ 날짜 정규화 함수 (어떤 형식이든 YYYY-MM-DD로 변환)
+        const formatDateStandard = (dateStr) => {
+            if (!dateStr) return "";
+            try {
+                // 이미 YYYY-MM-DD 형식이면 통과
+                if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+                
+                // Date 객체로 변환 시도
+                const d = new Date(dateStr);
+                if (isNaN(d.getTime())) return ""; // 날짜 아님
+                
+                // UTC 문제 방지: 로컬 시간 기준 YYYY-MM-DD 추출
+                const year = d.getFullYear();
+                const month = String(d.getMonth() + 1).padStart(2, '0');
+                const day = String(d.getDate()).padStart(2, '0');
+                return `${year}-${month}-${day}`;
+            } catch { return ""; }
+        };
+
         const getToday = () => {
             const now = new Date();
             const utc = now.getTime() + (now.getTimezoneOffset() * 60000); 
             const kstGap = 9 * 60 * 60 * 1000; 
             const today = new Date(utc + kstGap);
-            return today.toISOString().split('T')[0]; // YYYY-MM-DD
+            return today.toISOString().split('T')[0]; 
         };
 
         const findBestModel = async (apiKey) => {
@@ -125,6 +143,7 @@
             return `(${diff + 1}일)`; 
         };
 
+        // 🛠️ [DATA FIX] 구글 시트 데이터 정규화 (날짜 포맷 통일)
         const normalizeData = (rawData) => {
             if (!Array.isArray(rawData)) return [];
             return rawData.map(item => ({
@@ -133,13 +152,24 @@
                 title: item.title || '(제목 없음)',
                 cp: item.cp || '-',
                 category: item.category || '기타',
-                pricingPolicy: Array.isArray(item.pricingPolicy) ? item.pricingPolicy : []
+                // 정책 배열 내부의 날짜도 모두 표준화
+                pricingPolicy: Array.isArray(item.pricingPolicy) 
+                    ? item.pricingPolicy.map(p => ({
+                        ...p,
+                        startDate: formatDateStandard(p.startDate),
+                        endDate: formatDateStandard(p.endDate)
+                    })) 
+                    : []
             }));
         };
 
         const getEarliestStartDate = (item) => {
             if (!item.pricingPolicy || !Array.isArray(item.pricingPolicy) || item.pricingPolicy.length === 0) return null;
-            const sorted = [...item.pricingPolicy].sort((a, b) => (a.startDate || '9999').localeCompare(b.startDate || '9999'));
+            // 날짜가 있는 것만 필터링 후 정렬
+            const validPolicies = item.pricingPolicy.filter(p => p.startDate && p.startDate.length === 10);
+            if (validPolicies.length === 0) return null;
+            
+            const sorted = [...validPolicies].sort((a, b) => a.startDate.localeCompare(b.startDate));
             return sorted[0].startDate;
         };
 
@@ -165,7 +195,6 @@
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             
-            // 🛠️ [UX FIXED] 사이드바 상태
             const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
             const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
             
@@ -188,7 +217,6 @@
             const [googleScriptUrl, setGoogleScriptUrl] = useState(() => localStorage.getItem('google_script_url') || DEFAULT_GOOGLE_SCRIPT_URL);
             
             const [searchTerm, setSearchTerm] = useState('');
-            // 🛠️ 오늘 날짜 KST
             const currentDate = getToday();
             
             const [currentPage, setCurrentPage] = useState(1);
@@ -229,9 +257,10 @@
                     const response = await fetch(googleScriptUrl);
                     const json = await response.json();
                     if (Array.isArray(json)) {
+                        // 🛠️ 불러온 데이터 즉시 정규화 실행
                         const cleanData = normalizeData(json);
                         setData(cleanData);
-                        showToast('데이터 동기화 완료');
+                        showToast('데이터 동기화 완료 (날짜 형식 보정됨)');
                     } else if (json.error) {
                         showToast('데이터 불러오기 실패: ' + json.error);
                     }
@@ -279,27 +308,15 @@
                 }
             };
 
-            // 🛠️ [DEBUG] 오늘 날짜 테스트 데이터 생성 함수
             const handleCreateTestItem = () => {
                 if(!confirm("오늘 날짜(" + currentDate + ")로 시작하는 테스트 타이틀을 생성하시겠습니까?")) return;
-                
                 const testItem = {
-                    ...initialForm,
-                    id: Date.now(),
-                    title: `[TEST] 신규 타이틀 ${new Date().toLocaleTimeString()}`,
-                    cp: 'CJ ENM',
-                    category: '한국영화',
-                    pricingPolicy: [{
-                        mode: 'RENTAL',
-                        type: 'EPVOD',
-                        price: 10000,
-                        startDate: currentDate, // ⭐️ 오늘 날짜 강제 주입
-                        endDate: '9999-12-31'
-                    }]
+                    ...initialForm, id: Date.now(), title: `[TEST] 신규 타이틀 ${new Date().toLocaleTimeString()}`,
+                    cp: 'CJ ENM', category: '한국영화',
+                    pricingPolicy: [{ mode: 'RENTAL', type: 'EPVOD', price: 10000, startDate: currentDate, endDate: '9999-12-31' }]
                 };
-                
                 setData(prev => [testItem, ...prev]);
-                showToast("테스트 타이틀 생성됨. 대시보드를 확인하세요.");
+                showToast("테스트 타이틀 생성됨.");
                 setIsSettingsOpen(false);
             };
 
@@ -314,7 +331,11 @@
 
             const checkIsLive = useCallback((item) => {
                 if (!item || !item.pricingPolicy || !Array.isArray(item.pricingPolicy)) return false;
-                return item.pricingPolicy.some(p => p.startDate && p.endDate && currentDate >= p.startDate && currentDate <= p.endDate);
+                return item.pricingPolicy.some(p => {
+                    // 날짜 형식 재검증
+                    if(!p.startDate || !p.endDate) return false;
+                    return p.startDate <= currentDate && currentDate <= p.endDate;
+                });
             }, [currentDate]);
 
             const checkIsNew = useCallback((item) => {
@@ -509,24 +530,23 @@
 
             return (
                 <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
-                    {/* 🛠️ [UX FIXED] 사이드바: z-index 상향, width transition */}
                     <aside className={`flex flex-col bg-white border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed md:relative z-[60] h-full ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
                         
-                        {/* 헤더 & 접기 버튼 */}
+                        {/* 헤더 & 🛠️[텍스트 버튼 적용] */}
                         <div className="p-6 border-b flex justify-between items-center h-20 shrink-0">
                             {!isSidebarCollapsed ? (
                                 <div className="flex items-center justify-between w-full">
                                     <span className="text-xl font-bold text-indigo-900">Admin</span>
-                                    <button onClick={()=>setIsSidebarCollapsed(true)} className="hidden md:flex text-gray-400 hover:text-indigo-600"><Icon name="ChevronLeft"/></button>
+                                    <button onClick={()=>setIsSidebarCollapsed(true)} className="hidden md:block text-xs font-bold text-gray-400 hover:text-indigo-600">◀ 접기</button>
                                 </div>
                             ) : (
                                 <div className="flex flex-col items-center w-full gap-2">
                                     <span className="text-xl font-bold text-indigo-900">A</span>
-                                    <button onClick={()=>setIsSidebarCollapsed(false)} className="hidden md:flex text-gray-400 hover:text-indigo-600"><Icon name="ChevronRight"/></button>
+                                    <button onClick={()=>setIsSidebarCollapsed(false)} className="hidden md:block text-xs font-bold text-gray-400 hover:text-indigo-600">▶</button>
                                 </div>
                             )}
-                            {/* 모바일용 닫기 버튼: 항상 최상위 노출 */}
-                            <button className="md:hidden text-gray-600 p-2" onClick={()=>setIsSidebarOpen(false)}><Icon name="X" size={24}/></button>
+                            {/* 🛠️[모바일 닫기 텍스트] */}
+                            <button className="md:hidden text-sm font-bold text-gray-500 bg-gray-100 px-3 py-1 rounded" onClick={()=>setIsSidebarOpen(false)}>닫기</button>
                         </div>
 
                         <nav className="p-2 space-y-1 flex-1 overflow-y-auto">
@@ -554,7 +574,6 @@
                         </div>
                     </aside>
                     
-                    {/* 배경 어둡게 처리 (모바일 사이드바 열렸을 때) */}
                     {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-[55] md:hidden" onClick={()=>setIsSidebarOpen(false)}></div>}
 
                     <main className="flex-1 h-full overflow-hidden flex flex-col w-full relative">
@@ -709,7 +728,6 @@
                                         )}
                                     </div>
 
-                                    {/* 🛠️ [DEBUG] 오늘 날짜 데이터 생성 버튼 */}
                                     <button onClick={handleCreateTestItem} className="w-full py-3 bg-blue-50 text-blue-600 font-bold rounded hover:bg-blue-100 border border-blue-200 flex items-center justify-center gap-2">
                                         <Icon name="CalendarCheck" size={16}/> 📅 오늘 날짜 테스트 데이터 생성
                                     </button>
