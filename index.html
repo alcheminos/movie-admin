@@ -205,6 +205,7 @@
             
             const [managementFilter, setManagementFilter] = useState('ALL');
             const [filterCategory, setFilterCategory] = useState('ALL');
+            const [filterCp, setFilterCp] = useState('ALL');
             const [sortConfig, setSortConfig] = useState({ key: 'id', direction: 'desc' }); 
             
             const [toastMessage, setToastMessage] = useState(null);
@@ -249,7 +250,7 @@
                 }
             }, []);
 
-            useEffect(() => { setCurrentPage(1); }, [searchTerm, managementFilter, filterCategory, sortConfig]);
+            useEffect(() => { setCurrentPage(1); }, [searchTerm, managementFilter, filterCategory, filterCp, sortConfig]);
 
             useEffect(() => {
                 if (activeTab === 'history' && googleScriptUrl) {
@@ -476,6 +477,7 @@
                 }
             };
             
+            // 🛠️ [FIXED] AI Prompt: CP 제거 및 검색 정확도 개선
             const handleAiMeta = async () => {
                 if (!formData.title) return alert("타이틀을 먼저 입력해주세요.");
                 
@@ -484,12 +486,10 @@
 
                 setIsAiLoading(true);
                 
-                // 🛠️ [AI Prompt Updated] 카테고리 정보 포함
                 const prompt = `
                 영화 정보 검색 요청:
                 - 제목: ${formData.title}
                 - 카테고리: ${formData.category || '정보 없음'} (이 정보를 바탕으로 한국영화/해외영화 등을 구분하여 정확한 데이터를 찾아줘)
-                - 배급사/제작사 힌트: ${formData.cp || '정보 없음'}
 
                 위 영화에 대한 다음 정보를 아래의 JSON 포맷으로만 정확하게 출력해. 설명이나 마크다운 없이 순수 JSON만 줘.
                 정보가 없으면 빈 문자열("")로 채워.
@@ -557,6 +557,7 @@
                     return managementFilter === 'LIVE' ? isLive : !isLive;
                 })
                 .filter(d => filterCategory === 'ALL' ? true : d.category === filterCategory)
+                .filter(d => filterCp === 'ALL' ? true : d.cp === filterCp)
                 .sort((a, b) => {
                     const valA = a[sortConfig.key] || '';
                     const valB = b[sortConfig.key] || '';
@@ -682,10 +683,14 @@
                                         </div>
                                         <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
                                             <select className="border rounded-lg px-3 py-2 text-sm" value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}><option value="ALL">전체 카테고리</option>{CATEGORY_LIST.map(c=><option key={c} value={c}>{c}</option>)}</select>
+                                            <select className="border rounded-lg px-3 py-2 text-sm" value={filterCp} onChange={e=>setFilterCp(e.target.value)}>
+                                                <option value="ALL">전체 CP</option>
+                                                {CP_LIST.map(cp=><option key={cp} value={cp}>{cp}</option>)}
+                                            </select>
                                             <select className="border rounded-lg px-3 py-2 text-sm" value={sortConfig.key} onChange={(e) => setSortConfig({ key: e.target.value, direction: e.target.value === 'id' ? 'desc' : 'asc' })}>
                                                 <option value="id">최신순</option><option value="title">제목순</option><option value="cp">CP사순</option>
                                             </select>
-                                            <div className="relative flex-1"><Icon name="Search" className="absolute left-3 top-2.5 text-gray-400" size={16}/><input type="text" placeholder="검색..." className="w-full pl-9 border rounded-lg py-2 text-sm shadow-sm" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/></div>
+                                            <div className="relative flex-1"><Icon name="Search" className="absolute left-3 top-2.5 text-gray-400" size={16}/><input type="text" placeholder="제목 또는 CP 검색..." className="w-full pl-9 border rounded-lg py-2 text-sm shadow-sm" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/></div>
                                             <button onClick={()=>{setCurrentMode('add'); setFormData(initialForm); setIsModalOpen(true); setValidationError(null);}} className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 whitespace-nowrap"><Icon name="Plus"/> 등록</button>
                                         </div>
                                     </header>
