@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Admin Pro (AI Fixed)</title>
+    <title>Movie Admin Pro (Final Fixed)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -33,8 +33,10 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useCallback } = React;
 
-        // 🔑 [설정] 기본값 (주의: 이 키는 예시이며 실제 사용 시 본인의 API 키를 설정 메뉴에 입력해야 합니다)
-        const DEFAULT_GEMINI_API_KEY = ""; // 여기에 유효한 API 키가 없으면 설정 메뉴에서 입력해야 함
+        // 🔑 [설정] 기본값
+        // 주의: 소스코드에 키를 직접 넣으면 구글이 자동으로 차단합니다. 
+        // 화면 좌측 하단 [설정] 메뉴에서 키를 입력하는 방식을 권장합니다.
+        const DEFAULT_GEMINI_API_KEY = ""; 
         const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxvf0C_LDJVF04prdqfZABIhXDIVLOUoh-nPjwiUa4OMDOz7-jeBRlTwwbpIXM_zhTyJg/exec";
 
         // 🔥 Firebase 설정
@@ -56,16 +58,34 @@
             }
         } catch (e) { console.error("Firebase Init Error:", e); }
 
+        // 🛠️ [FIXED] AI 호출 함수 수정 (모델 변경: gemini-pro)
         const callGemini = async (prompt, apiKey) => {
-            if (!apiKey) return { error: "API 키가 설정되지 않았습니다. [설정] 메뉴에서 키를 입력해주세요." };
+            if (!apiKey) return { error: "API 키가 없습니다. [설정] 메뉴에서 키를 입력해주세요." };
+            
             try {
-                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`, {
-                    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
+                // 모델을 'gemini-pro'로 변경하여 안정성 확보
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${apiKey}`, {
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] })
                 });
-                if (!response.ok) { const err = await response.json(); throw new Error(err.error?.message || `API Error: ${response.status}`); }
+
+                if (!response.ok) { 
+                    const err = await response.json(); 
+                    // 에러 메시지가 구체적이지 않을 경우를 대비한 처리
+                    const errMsg = err.error?.message || `API Error (${response.status})`;
+                    if(errMsg.includes("key")) return { error: "API 키가 만료되었거나 차단되었습니다. 새 키를 발급받으세요." };
+                    throw new Error(errMsg); 
+                }
+
                 const result = await response.json();
-                return { text: result.candidates?.[0]?.content?.parts?.[0]?.text };
-            } catch (e) { return { error: e.message }; }
+                const text = result.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (!text) throw new Error("AI가 응답하지 않았습니다.");
+                return { text };
+
+            } catch (e) { 
+                return { error: e.message }; 
+            }
         };
 
         // [SAFE ICON]
@@ -98,7 +118,6 @@
             return `(${diff + 1}일)`; 
         };
 
-        // [CRASH FIX] Strong Data Normalizer
         const normalizeData = (rawData) => {
             if (!Array.isArray(rawData)) return [];
             return rawData.map(item => ({
@@ -118,7 +137,6 @@
             const [loginPw, setLoginPw] = useState("");
             const [loginError, setLoginError] = useState(null);
 
-            // Data State
             const [data, setData] = useState(() => {
                 try { 
                     const saved = localStorage.getItem('admin_data_cache');
@@ -131,7 +149,6 @@
             const [requests, setRequests] = useState([]);
             const [history, setHistory] = useState([]);
             
-            // UI State
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -168,14 +185,12 @@
             };
             const [formData, setFormData] = useState(initialForm);
 
-            // Safe Persist
             useEffect(() => { 
                 try { 
                     if (Array.isArray(data)) localStorage.setItem('admin_data_cache', JSON.stringify(data)); 
                 } catch (e) { console.error("Save Error", e); } 
             }, [data]);
 
-            // Auth
             useEffect(() => {
                 if (auth) {
                     const unsubscribe = auth.onAuthStateChanged((u) => {
@@ -187,7 +202,6 @@
 
             useEffect(() => { setCurrentPage(1); }, [searchTerm, managementFilter, filterCategory, sortConfig]);
 
-            // Manual Fetch
             const fetchData = async () => {
                 if (!googleScriptUrl) return showToast("설정에서 URL을 확인해주세요.");
                 setIsFetching(true);
@@ -237,13 +251,11 @@
                 } catch (e) { showToast('❌ 전송 실패'); }
             };
 
-            // Helper to check Live status
             const checkIsLive = useCallback((item) => {
                 if (!item || !item.pricingPolicy || !Array.isArray(item.pricingPolicy)) return false;
                 return item.pricingPolicy.some(p => p.startDate && p.endDate && currentDate >= p.startDate && currentDate <= p.endDate);
             }, [currentDate]);
 
-            // Stats
             const stats = useMemo(() => {
                 const safeData = Array.isArray(data) ? data : [];
                 const total = safeData.length;
@@ -251,7 +263,6 @@
                 return { total, active, monthly: [], startingToday: [] }; 
             }, [data, checkIsLive]);
             
-            // Stats: Monthly
             const monthlyStats = useMemo(() => {
                  const safeData = Array.isArray(data) ? data : [];
                  const last3Months = [];
@@ -305,7 +316,6 @@
                 setValidationError(null);
             };
             
-            // Form & Save Handlers
             const checkPolicyOverlap = (policies) => {
                 if (!policies || !Array.isArray(policies)) return null;
                 for (let i = 0; i < policies.length; i++) {
@@ -350,14 +360,12 @@
                 setHistory(prev => [newLog, ...prev]);
             };
             
-            // 🔥 [AI Logic Updated] 
             const handleAiMeta = async () => {
                 if (!formData.title) return alert("타이틀을 먼저 입력해주세요.");
                 if (!geminiApiKey) return alert("설정(좌측 하단)에서 Gemini API Key를 입력해주세요.");
 
                 setIsAiLoading(true);
                 
-                // 프롬프트 강화: 포맷 강제
                 const prompt = `
                 영화 정보 검색 요청:
                 - 제목: ${formData.title}
@@ -377,33 +385,26 @@
                 const res = await callGemini(prompt, geminiApiKey);
                 
                 if (res.error) {
-                    alert(res.error);
+                    alert("AI 오류: " + res.error);
                 } else if (res.text) {
                     try {
-                        // Markdown 코드 블록 제거 및 JSON 추출 강화
                         let jsonStr = res.text;
-                        // ```json ... ``` 제거
                         if (jsonStr.includes("```json")) {
                             jsonStr = jsonStr.split("```json")[1].split("```")[0];
                         } else if (jsonStr.includes("```")) {
                             jsonStr = jsonStr.split("```")[1].split("```")[0];
                         }
-                        
                         const json = JSON.parse(jsonStr);
-                        
-                        // 데이터 반영
                         setFormData(prev => ({ ...prev, ...json }));
                         showToast("AI 데이터 입력 완료!");
-                        
                     } catch (e) {
                         console.error("AI Parse Error:", e);
-                        alert("AI 응답을 분석하는데 실패했습니다. 다시 시도해주세요.\n(응답내용: " + res.text.substring(0, 50) + "...)");
+                        alert("데이터 분석 실패. 다시 시도해주세요.");
                     }
                 }
                 setIsAiLoading(false);
             };
 
-            // Auto Holdback Logic
             const applyAutoHoldback = (baseDate, mode) => {
                 if (!baseDate) return;
                 const existingPolicies = formData.pricingPolicy.filter(p => p.mode !== mode);
@@ -427,7 +428,6 @@
             const addPolicy = (mode) => setFormData({ ...formData, pricingPolicy: [...formData.pricingPolicy, { mode, type: 'RVOD', price: 0, startDate: getToday(), endDate: '9999-12-31' }] });
             const removePolicy = (i) => setFormData({ ...formData, pricingPolicy: formData.pricingPolicy.filter((_, idx) => idx !== i) });
 
-            // Safe Filtering & Sorting
             const safeData = Array.isArray(data) ? data : [];
             const filteredData = safeData
                 .filter(d => (d.title||'').includes(searchTerm) || (d.cp||'').includes(searchTerm))
@@ -480,7 +480,6 @@
                                     <div onClick={()=>handleCardClick('REQUESTS')} className="bg-white p-5 rounded-xl border card-hover"><div className="text-gray-500 text-sm">신규 요청</div><div className="text-3xl font-bold text-red-500 mt-1">{requests.length}</div></div>
                                 </div>
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* Monthly Chart */}
                                     <div className="bg-white p-6 rounded-xl border">
                                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2"><Icon name="BarChart"/> 월별 편성 (최근 3개월)</h3>
                                         <div className="flex items-end justify-between h-[250px] pt-4 gap-2 border-b">
@@ -495,7 +494,6 @@
                                             ))}
                                         </div>
                                     </div>
-                                    {/* Today List */}
                                     <div className="bg-white p-6 rounded-xl border flex flex-col">
                                         <h3 className="font-bold text-lg mb-4 flex items-center gap-2 justify-between"><span className="flex items-center gap-2"><Icon name="PlayCircle" className="text-green-600"/> 금일 편성 타이틀 ({activeList.length}건)</span></h3>
                                         <div className="flex-1 overflow-y-auto pr-2 space-y-2 max-h-[250px]">
@@ -524,7 +522,6 @@
                                     </div>
                                     <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
                                         <select className="border rounded-lg px-3 py-2 text-sm" value={filterCategory} onChange={e=>setFilterCategory(e.target.value)}><option value="ALL">전체 카테고리</option>{CATEGORY_LIST.map(c=><option key={c} value={c}>{c}</option>)}</select>
-                                        
                                         <select 
                                             className="border rounded-lg px-3 py-2 text-sm" 
                                             value={sortConfig.key} 
@@ -534,7 +531,6 @@
                                             <option value="title">제목순</option>
                                             <option value="cp">CP사순</option>
                                         </select>
-                                        
                                         <div className="relative flex-1"><Icon name="Search" className="absolute left-3 top-2.5 text-gray-400" size={16}/><input type="text" placeholder="검색..." className="w-full pl-9 border rounded-lg py-2 text-sm shadow-sm" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/></div>
                                         <button onClick={()=>{setCurrentMode('add'); setFormData(initialForm); setIsModalOpen(true); setValidationError(null);}} className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 whitespace-nowrap"><Icon name="Plus"/> 등록</button>
                                     </div>
@@ -569,7 +565,6 @@
                                             </tbody>
                                         </table>
                                     </div>
-                                    {/* Pagination */}
                                     <div className="p-4 border-t bg-gray-50 flex justify-between items-center">
                                         <span className="text-xs text-gray-500">{filteredData.length}개 중 {(currentPage-1)*itemsPerPage + 1}-{Math.min(currentPage*itemsPerPage, filteredData.length)}</span>
                                         <div className="flex gap-2">
@@ -580,11 +575,8 @@
                                 </div>
                             </>
                         )}
-
-                        {/* Requests, History ... */}
                     </main>
 
-                    {/* Modals (Settings, Form) - Kept same */}
                     {isSettingsOpen && (
                         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
                             <div className="bg-white rounded-xl w-full max-w-md p-6 shadow-2xl">
