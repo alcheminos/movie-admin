@@ -235,28 +235,8 @@
             };
             const [formData, setFormData] = useState(initialForm);
 
-            useEffect(() => { 
-                try { 
-                    if (Array.isArray(data)) localStorage.setItem('admin_data_cache', JSON.stringify(data)); 
-                } catch (e) { console.error("Save Error", e); } 
-            }, [data]);
-
-            useEffect(() => {
-                if (auth) {
-                    const unsubscribe = auth.onAuthStateChanged((u) => {
-                        setUser(u); setIsLoggedIn(!!u);
-                    });
-                    return () => unsubscribe();
-                }
-            }, []);
-
-            useEffect(() => { setCurrentPage(1); }, [searchTerm, managementFilter, filterCategory, filterCp, sortConfig]);
-
-            useEffect(() => {
-                if (activeTab === 'history' && googleScriptUrl) {
-                    fetchHistory();
-                }
-            }, [activeTab]);
+            // 🛠️ [API 정의] (useEffect 위로 이동)
+            const showToast = (msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 3000); };
 
             const fetchData = async () => {
                 if (!googleScriptUrl) return showToast("설정에서 URL을 확인해주세요.");
@@ -285,6 +265,38 @@
                 } catch (e) { console.error("History Fetch Error", e); }
             };
 
+            // 🛠️ [AUTO SYNC] 초기 진입 시 데이터 자동 동기화
+            useEffect(() => {
+                if (googleScriptUrl && googleScriptUrl.startsWith("http")) {
+                    fetchData();
+                    fetchHistory();
+                }
+            }, []); 
+
+            useEffect(() => { 
+                try { 
+                    if (Array.isArray(data)) localStorage.setItem('admin_data_cache', JSON.stringify(data)); 
+                } catch (e) { console.error("Save Error", e); } 
+            }, [data]);
+
+            useEffect(() => {
+                if (auth) {
+                    const unsubscribe = auth.onAuthStateChanged((u) => {
+                        setUser(u); setIsLoggedIn(!!u);
+                    });
+                    return () => unsubscribe();
+                }
+            }, []);
+
+            useEffect(() => { setCurrentPage(1); }, [searchTerm, managementFilter, filterCategory, filterCp, sortConfig]);
+
+            // 🛠️ [History] 탭 전환 시 히스토리 Fetch (추가 보완)
+            useEffect(() => {
+                if (activeTab === 'history' && googleScriptUrl) {
+                    fetchHistory();
+                }
+            }, [activeTab]);
+
             const handleLogin = async (e) => {
                 e.preventDefault(); setLoginError(null);
                 if (!auth) return setLoginError("Firebase 설정 오류");
@@ -292,13 +304,15 @@
                 catch (error) { setLoginError("로그인 실패"); }
             };
             const handleLogout = () => auth ? auth.signOut() : setIsLoggedIn(false);
-            const showToast = (msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 3000); };
             
             const handleSaveSettings = () => {
                 localStorage.setItem('gemini_api_key', geminiApiKey);
                 localStorage.setItem('google_script_url', googleScriptUrl);
                 setIsSettingsOpen(false);
                 showToast('설정 저장됨');
+                // 설정 저장 후 즉시 데이터 동기화 시도
+                fetchData();
+                fetchHistory();
             };
 
             const handleForceReset = () => {
