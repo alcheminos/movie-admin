@@ -98,6 +98,7 @@
             const [data, setData] = useState(() => {
                 try { const saved = localStorage.getItem('admin_data_cache'); if (!saved) return []; return normalizeData(JSON.parse(saved)); } catch { return []; }
             });
+            const [requests, setRequests] = useState([]); // 🛠️ [FIX] 누락된 requests 상태 추가
             const [history, setHistory] = useState([]); 
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
@@ -120,7 +121,7 @@
             const [currentPage, setCurrentPage] = useState(1);
             const itemsPerPage = 20;
             
-            // 🛠️ https://www.wordreference.com/koen/%EA%B4%80%EB%A6%AC 초기화 로직 강화 (기본값 우선)
+            // 🛠️ URL 관리: 저장된 값이 없으면 기본값 사용
             const [googleScriptUrl, setGoogleScriptUrl] = useState(() => {
                 const saved = localStorage.getItem('google_script_url');
                 return (saved && saved.startsWith('http')) ? saved : DEFAULT_GOOGLE_SCRIPT_URL;
