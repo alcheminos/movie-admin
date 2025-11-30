@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Admin (Server AI)</title>
+    <title>Movie Admin</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -31,10 +31,10 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useCallback } = React;
 
-        // 🔑 [설정] URL만 있으면 됨 (API Key는 이제 GAS에 저장됨)
+        // 🔑 [설정] 기본값 (Google Script URL)
         const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxvf0C_LDJVF04prdqfZABIhXDIVLOUoh-nPjwiUa4OMDOz7-jeBRlTwwbpIXM_zhTyJg/exec";
 
-        // 🛠️ 날짜/아이콘/유틸 함수들 (기존 동일)
+        // 🛠️ 날짜/아이콘/유틸 함수들
         const formatDateStandard = (dateStr) => {
             if (!dateStr) return "";
             try {
@@ -120,7 +120,7 @@
             const [currentPage, setCurrentPage] = useState(1);
             const itemsPerPage = 20;
             
-            // 🛠️ [URL만 관리] 키 제거
+            // 🛠️ https://www.wordreference.com/koen/%EA%B4%80%EB%A6%AC 초기화 로직 강화 (기본값 우선)
             const [googleScriptUrl, setGoogleScriptUrl] = useState(() => {
                 const saved = localStorage.getItem('google_script_url');
                 return (saved && saved.startsWith('http')) ? saved : DEFAULT_GOOGLE_SCRIPT_URL;
@@ -134,10 +134,12 @@
             const showToast = (msg) => { setToastMessage(msg); setTimeout(() => setToastMessage(null), 3000); };
 
             const fetchData = async () => {
-                if (!googleScriptUrl) return showToast("설정 오류: URL 확인 필요");
+                const targetUrl = googleScriptUrl && googleScriptUrl.startsWith("http") ? googleScriptUrl : DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!targetUrl) return showToast("설정 오류: URL 확인 필요");
+                
                 setIsFetching(true);
                 try {
-                    const response = await fetch(googleScriptUrl);
+                    const response = await fetch(targetUrl);
                     const json = await response.json();
                     if (Array.isArray(json)) {
                         setData(normalizeData(json));
@@ -148,15 +150,20 @@
             };
 
             const fetchHistory = async () => {
+                const targetUrl = googleScriptUrl && googleScriptUrl.startsWith("http") ? googleScriptUrl : DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!targetUrl) return;
+
                 try {
-                    const response = await fetch(googleScriptUrl + "?type=history");
+                    const response = await fetch(targetUrl + "?type=history");
                     const json = await response.json();
                     if (Array.isArray(json)) setHistory(json);
                 } catch (e) { }
             };
 
+            // 🛠️ [AUTO SYNC] Mount 시 자동 실행
             useEffect(() => {
-                if (googleScriptUrl) { fetchData(); fetchHistory(); }
+                fetchData(); 
+                fetchHistory();
             }, []); 
 
             useEffect(() => { try { if (Array.isArray(data)) localStorage.setItem('admin_data_cache', JSON.stringify(data)); } catch (e) {} }, [data]);
@@ -178,11 +185,13 @@
             };
 
             const syncToSheet = async (item, action = 'UPDATE') => {
-                if (!googleScriptUrl) return;
+                const targetUrl = googleScriptUrl && googleScriptUrl.startsWith("http") ? googleScriptUrl : DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!targetUrl) return;
+                
                 try {
                     if (action === 'DELETE') setData(prev => prev.filter(d => d.id !== item.id));
                     const earliestStart = getEarliestStartDate(item);
-                    fetch(googleScriptUrl, { 
+                    fetch(targetUrl, { 
                         method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, 
                         body: JSON.stringify({ ...item, syncAction: action, earliestStartDate: earliestStart || '' }) 
                     });
@@ -190,17 +199,19 @@
                 } catch (e) { showToast('전송 실패'); }
             };
 
-            // 🛠️ [NEW] AI 요청을 서버(GAS)로 전송
+            // 🛠️ [AI Logic] Server-side 호출 (CP 제외, Title+Category만 사용)
             const handleAiMeta = async () => {
                 if (!formData.title) return alert("타이틀을 입력해주세요.");
-                if (!googleScriptUrl) return alert("Google Script URL 설정이 필요합니다.");
+                const targetUrl = googleScriptUrl && googleScriptUrl.startsWith("http") ? googleScriptUrl : DEFAULT_GOOGLE_SCRIPT_URL;
+                if (!targetUrl) return alert("Google Script URL 설정이 필요합니다.");
 
                 setIsAiLoading(true);
                 
+                // 🛠️ 프롬프트 수정: CP 제외, 카테고리 강조
                 const prompt = `
                 영화 정보 검색 요청:
                 - 제목: ${formData.title}
-                - 카테고리: ${formData.category || '정보 없음'} (이 정보를 바탕으로 한국영화/해외영화 등을 구분하여 정확한 데이터를 찾아줘)
+                - 카테고리: ${formData.category || '정보 없음'} (이 정보를 바탕으로 동명의 다른 영화가 아닌, 해당 카테고리의 영화 데이터를 정확히 찾아줘)
 
                 위 영화에 대한 다음 정보를 아래의 JSON 포맷으로만 정확하게 출력해. 설명이나 마크다운 없이 순수 JSON만 줘.
                 정보가 없으면 빈 문자열("")로 채워.
@@ -214,18 +225,10 @@
                 }`;
 
                 try {
-                    // 🚀 GAS로 AI 요청 전송
-                    const response = await fetch(googleScriptUrl, {
+                    const response = await fetch(targetUrl, {
                         method: 'POST',
-                        // GAS 특성상 POST 응답을 직접 받으려면 redirect: 'follow'가 필요하나, 
-                        // no-cors 모드에서는 응답 본문을 읽을 수 없음.
-                        // 따라서 AI 기능만은 'GET' 방식 파라미터나 별도 엔드포인트를 쓰거나,
-                        // 현재 구조(Simple Trigger)에서는 doPost가 값을 반환하도록 설정했으므로
-                        // fetch 옵션을 조정해야 함. 하지만 CORS 문제로 인해, 
-                        // 가장 확실한 방법은 doPost가 텍스트를 리턴하고, 클라이언트가 redirect를 따르는 것입니다.
-                        // 여기서는 fetch 모드를 'cors'로 설정하고 GAS 웹 앱 배포 시 "모든 사용자(Anonymous)" 접근 허용이 필수입니다.
                         redirect: "follow", 
-                        headers: { "Content-Type": "text/plain;charset=utf-8" }, // GAS는 text/plain 선호
+                        headers: { "Content-Type": "text/plain;charset=utf-8" },
                         body: JSON.stringify({ syncAction: "AI_SEARCH", prompt: prompt })
                     });
                     
@@ -244,7 +247,7 @@
                     }
                 } catch (e) {
                     console.error(e);
-                    alert("AI 통신 실패 (CORS 또는 네트워크 오류). GAS 배포 설정을 확인하세요.");
+                    alert("AI 통신 실패. GAS 배포 설정을 확인하세요.");
                 } finally {
                     setIsAiLoading(false);
                 }
@@ -305,7 +308,15 @@
             };
             const handleDelete = (item) => { if (confirm(`삭제하시겠습니까?`)) { setData(prev => prev.filter(d => d.id !== item.id)); addHistory('DELETE', item.title, '타이틀 삭제'); syncToSheet(item, 'DELETE'); showToast('삭제됨'); } };
             const addHistory = (action, target, details) => {
-                if (googleScriptUrl) fetch(googleScriptUrl, { method: 'POST', mode: 'no-cors', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ syncAction: "LOG_HISTORY", user: user?.email || 'Admin', action, target, details }) });
+                const targetUrl = googleScriptUrl && googleScriptUrl.startsWith("http") ? googleScriptUrl : DEFAULT_GOOGLE_SCRIPT_URL;
+                if (targetUrl) {
+                    fetch(targetUrl, {
+                        method: 'POST',
+                        mode: 'no-cors',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ syncAction: "LOG_HISTORY", user: user?.email || 'Admin', action, target, details })
+                    });
+                }
             };
             const applyAutoHoldback = (baseDate, mode) => {
                 if (!baseDate) return;
