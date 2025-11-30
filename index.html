@@ -10,6 +10,10 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://unpkg.com/lucide@0.263.1"></script>
     
+    <!-- 🔥 Firebase SDK -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+
     <link rel="stylesheet" as="style" crossorigin href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.8/dist/web/static/pretendard.css" />
     <style>
         body { font-family: "Pretendard Variable", Pretendard, sans-serif; }
@@ -31,8 +35,19 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useCallback } = React;
 
-        // 🔑 [설정] 구글 스크립트 URL (이 URL로 모든 데이터 처리가 전달됩니다)
+        // 🔑 [설정] 구글 스크립트 URL
         const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxvf0C_LDJVF04prdqfZABIhXDIVLOUoh-nPjwiUa4OMDOz7-jeBRlTwwbpIXM_zhTyJg/exec";
+
+        // 🔥 Firebase 설정
+        const firebaseConfig = {
+            apiKey: "AIzaSyDsuxadED3xkBeGf2X2caD2ZWXG0qaSVqc",
+            authDomain: "movie-45532.firebaseapp.com",
+            projectId: "movie-45532",
+            storageBucket: "movie-45532.firebasestorage.app",
+            messagingSenderId: "734371910812",
+            appId: "1:734371910812:web:b2bad9c351529dbf054959",
+            measurementId: "G-S3XL65W4G0"
+        };
 
         // 🛠️ 날짜/아이콘/유틸 함수들
         const formatDateStandard = (dateStr) => {
@@ -111,7 +126,6 @@
                 try { const saved = localStorage.getItem('admin_data_cache'); if (!saved) return []; return normalizeData(JSON.parse(saved)); } catch { return []; }
             });
             
-            // 🛠️ [FIX] requests 상태 복구 (에러 원인)
             const [requests, setRequests] = useState([]); 
             const [history, setHistory] = useState([]); 
 
@@ -170,31 +184,43 @@
                 } catch (e) { }
             };
 
-            // 🛠️ [AUTO SYNC] Mount 시 자동 실행
+            // 🛠️ [AUTO SYNC & AUTH] Mount 시 자동 실행
             useEffect(() => {
+                // 1. 데이터 동기화
                 fetchData(); 
                 fetchHistory();
+
+                // 2. Firebase Auth 리스너 (컴포넌트 내부에서 안전하게 실행)
+                let unsubscribe = null;
+                if (typeof firebase !== 'undefined') {
+                    try {
+                        if (!firebase.apps.length) {
+                            firebase.initializeApp(firebaseConfig);
+                        }
+                        unsubscribe = firebase.auth().onAuthStateChanged((u) => {
+                            setUser(u);
+                            setIsLoggedIn(!!u);
+                        });
+                    } catch (e) { console.error("Auth Init Error:", e); }
+                }
+                
+                return () => { if (unsubscribe) unsubscribe(); };
             }, []); 
 
             useEffect(() => { try { if (Array.isArray(data)) localStorage.setItem('admin_data_cache', JSON.stringify(data)); } catch (e) {} }, [data]);
-            useEffect(() => { 
-                if (auth) {
-                    const unsubscribe = auth.onAuthStateChanged((u) => {
-                        setUser(u); setIsLoggedIn(!!u);
-                    });
-                    return () => unsubscribe();
-                }
-            }, []);
             useEffect(() => { setCurrentPage(1); }, [searchTerm, managementFilter, filterCategory, filterCp, sortConfig]);
             useEffect(() => { if (activeTab === 'history') fetchHistory(); }, [activeTab]);
 
             const handleLogin = async (e) => {
                 e.preventDefault(); setLoginError(null);
-                if (!auth) return setLoginError("Firebase 설정 오류");
-                try { await auth.signInWithEmailAndPassword(loginEmail, loginPw); } 
+                if (typeof firebase === 'undefined') return setLoginError("Firebase 로드 실패");
+                try { await firebase.auth().signInWithEmailAndPassword(loginEmail, loginPw); } 
                 catch (error) { setLoginError("로그인 실패"); }
             };
-            const handleLogout = () => auth ? auth.signOut() : setIsLoggedIn(false);
+            const handleLogout = () => {
+                 if (typeof firebase !== 'undefined') firebase.auth().signOut();
+                 else setIsLoggedIn(false);
+            };
 
             const handleSaveSettings = () => {
                 localStorage.setItem('google_script_url', googleScriptUrl);
@@ -233,7 +259,6 @@
 
                 setIsAiLoading(true);
                 
-                // 🛠️ 프롬프트 수정: CP 제외, 카테고리 강조
                 const prompt = `
                 영화 정보 검색 요청:
                 - 제목: ${formData.title}
