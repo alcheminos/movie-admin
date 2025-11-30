@@ -31,7 +31,7 @@
     <script type="text/babel">
         const { useState, useMemo, useEffect, useCallback } = React;
 
-        // 🔑 [설정] 기본값 (Google Script URL)
+        // 🔑 [설정] 구글 스크립트 URL (이 URL로 모든 데이터 처리가 전달됩니다)
         const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxvf0C_LDJVF04prdqfZABIhXDIVLOUoh-nPjwiUa4OMDOz7-jeBRlTwwbpIXM_zhTyJg/exec";
 
         // 🛠️ 날짜/아이콘/유틸 함수들
@@ -95,11 +95,26 @@
         };
 
         const AdvancedAdminDashboard = () => {
+            const [user, setUser] = useState(null);
+            const [isLoggedIn, setIsLoggedIn] = useState(false);
+            const [loginEmail, setLoginEmail] = useState("");
+            const [loginPw, setLoginPw] = useState("");
+            const [loginError, setLoginError] = useState(null);
+
+            // 🛠️ https://www.wordreference.com/koen/%EA%B4%80%EB%A6%AC 저장된 값이 없으면 기본값 사용
+            const [googleScriptUrl, setGoogleScriptUrl] = useState(() => {
+                const saved = localStorage.getItem('google_script_url');
+                return (saved && saved.startsWith('http')) ? saved : DEFAULT_GOOGLE_SCRIPT_URL;
+            });
+
             const [data, setData] = useState(() => {
                 try { const saved = localStorage.getItem('admin_data_cache'); if (!saved) return []; return normalizeData(JSON.parse(saved)); } catch { return []; }
             });
-            const [requests, setRequests] = useState([]); // 🛠️ [FIX] 누락된 requests 상태 추가
+            
+            // 🛠️ [FIX] requests 상태 복구 (에러 원인)
+            const [requests, setRequests] = useState([]); 
             const [history, setHistory] = useState([]); 
+
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
@@ -120,12 +135,6 @@
             const currentDate = getToday();
             const [currentPage, setCurrentPage] = useState(1);
             const itemsPerPage = 20;
-            
-            // 🛠️ URL 관리: 저장된 값이 없으면 기본값 사용
-            const [googleScriptUrl, setGoogleScriptUrl] = useState(() => {
-                const saved = localStorage.getItem('google_script_url');
-                return (saved && saved.startsWith('http')) ? saved : DEFAULT_GOOGLE_SCRIPT_URL;
-            });
 
             const CP_LIST = [ "CJ ENM", "롯데 엔터테인먼트", "쇼박스", "NEW", "콘텐츠판다", "케이티알파", "스튜디오산타클로스", "이놀미디어", "나인플래너스", "소니픽쳐스", "유니버설", "워너브라더스", "디즈니", "파라마운트", "더쿱분배", "엣나인필름", "영화사 진진", "티캐스트" ];
             const CATEGORY_LIST = ["한국영화", "한국영화애니메이션", "해외영화", "해외영화애니메이션", "한농협영화"];
@@ -146,7 +155,7 @@
                         setData(normalizeData(json));
                         showToast('동기화 완료');
                     }
-                } catch (e) { showToast('동기화 실패'); } 
+                } catch (e) { showToast('동기화 실패 (네트워크 확인)'); } 
                 finally { setIsFetching(false); }
             };
 
@@ -168,8 +177,24 @@
             }, []); 
 
             useEffect(() => { try { if (Array.isArray(data)) localStorage.setItem('admin_data_cache', JSON.stringify(data)); } catch (e) {} }, [data]);
+            useEffect(() => { 
+                if (auth) {
+                    const unsubscribe = auth.onAuthStateChanged((u) => {
+                        setUser(u); setIsLoggedIn(!!u);
+                    });
+                    return () => unsubscribe();
+                }
+            }, []);
             useEffect(() => { setCurrentPage(1); }, [searchTerm, managementFilter, filterCategory, filterCp, sortConfig]);
             useEffect(() => { if (activeTab === 'history') fetchHistory(); }, [activeTab]);
+
+            const handleLogin = async (e) => {
+                e.preventDefault(); setLoginError(null);
+                if (!auth) return setLoginError("Firebase 설정 오류");
+                try { await auth.signInWithEmailAndPassword(loginEmail, loginPw); } 
+                catch (error) { setLoginError("로그인 실패"); }
+            };
+            const handleLogout = () => auth ? auth.signOut() : setIsLoggedIn(false);
 
             const handleSaveSettings = () => {
                 localStorage.setItem('google_script_url', googleScriptUrl);
@@ -329,7 +354,7 @@
                 let newBtv = {};
                 if (mode === "RENTAL") { 
                     let btvBase = cp.includes("스튜디오산타") ? pvStart : epStart;
-                    let avail = cp.includes("CJ ENM") ? addMonths(btvBase, 9) : (["롯데", "쇼박스", "콘텐츠판다", "케이티알파"].some(c => cp.includes(c)) ? addDays(btvBase, 42) : btvBase);
+                    let avail = cp.includes("CJ ENM") ? addMonths(btvBase, 9) : (["롯데", "쇼박스", "콘텐츠판다", "케이티알파", "롯데"].some(c => cp.includes(c)) ? addDays(btvBase, 42) : btvBase);
                     newBtv = { btvPlusStatus: 'Y', btvPlusAvailableDate: avail, btvPlusActualDate: getNextTueOrFri(avail) };
                 }
                 setFormData(prev => ({ ...prev, ...newBtv, pricingPolicy: [...existing, ...newPol] }));
@@ -341,6 +366,8 @@
             const safeData = Array.isArray(data) ? data : [];
             const filteredData = safeData.filter(d => (d.title||'').includes(searchTerm) || (d.cp||'').includes(searchTerm)).filter(d => managementFilter === 'ALL' ? true : (managementFilter === 'LIVE' ? checkIsLive(d) : !checkIsLive(d))).filter(d => filterCategory === 'ALL' ? true : d.category === filterCategory).filter(d => filterCp === 'ALL' ? true : d.cp === filterCp).sort((a, b) => { const valA = a[sortConfig.key] || ''; const valB = b[sortConfig.key] || ''; if (sortConfig.key === 'id') return sortConfig.direction === 'asc' ? valA - valB : valB - valA; return sortConfig.direction === 'asc' ? String(valA).localeCompare(String(valB)) : String(valB).localeCompare(String(valA)); });
             const currentItems = filteredData.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+
+            if (!isLoggedIn) return (<div className="min-h-screen flex items-center justify-center bg-gray-100"><div className="bg-white p-8 rounded-2xl shadow-xl w-full max-w-md"><h2 className="text-2xl font-bold text-center mb-6">Admin Login</h2><form onSubmit={handleLogin} className="space-y-4"><input type="email" value={loginEmail} onChange={e=>setLoginEmail(e.target.value)} className="w-full border p-3 rounded" placeholder="Email" required/><input type="password" value={loginPw} onChange={e=>setLoginPw(e.target.value)} className="w-full border p-3 rounded" placeholder="Password" required/><button type="submit" className="w-full bg-indigo-600 text-white py-3 rounded font-bold hover:bg-indigo-700 transition">로그인</button></form></div></div>);
 
             return (
                 <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
@@ -360,6 +387,9 @@
                             <button onClick={()=>setIsSettingsOpen(true)} className={`w-full flex items-center gap-2 px-4 py-2 rounded text-sm font-medium hover:bg-gray-200 text-gray-700 ${isSidebarCollapsed ? 'justify-center' : ''}`} title="설정"><Icon name="Settings" size={16}/> {!isSidebarCollapsed && "설정"}</button>
                             <button onClick={fetchData} disabled={isFetching} className={`w-full flex items-center gap-2 px-4 py-2 rounded text-sm font-medium hover:bg-gray-200 text-indigo-600 ${isSidebarCollapsed ? 'justify-center' : ''}`} title="동기화">{isFetching?<Icon name="Loader2" className="animate-spin" size={16}/>:<Icon name="RefreshCw" size={16}/>} {!isSidebarCollapsed && "동기화"}</button>
                             <button onClick={handleFullReset} className={`w-full flex items-center gap-2 px-4 py-2 rounded text-sm font-medium hover:bg-red-50 text-red-500 ${isSidebarCollapsed ? 'justify-center' : ''}`} title="초기화"><Icon name="Trash" size={16}/> {!isSidebarCollapsed && "초기화"}</button>
+                            <button onClick={handleLogout} className={`w-full flex items-center gap-2 px-4 py-2 text-xs text-red-500 font-bold hover:bg-red-50 rounded ${isSidebarCollapsed ? 'justify-center' : ''}`} title="로그아웃">
+                                <Icon name="LogOut" size={16}/> {!isSidebarCollapsed && "로그아웃"}
+                            </button>
                         </div>
                     </aside>
                     {isSidebarOpen && <div className="fixed inset-0 bg-black/50 z-[55] md:hidden" onClick={()=>setIsSidebarOpen(false)}></div>}
