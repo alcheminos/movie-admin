@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Admin (Fixed)</title>
+    <title>Movie Admin (Server-Side AI)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -113,11 +113,9 @@
             return `(${diff + 1}일)`; 
         };
 
-        // 🛠️ [수정됨] 데이터 정규화 함수 (필터링 강화)
         const normalizeData = (rawData) => {
             if (!Array.isArray(rawData)) return [];
             return rawData
-                // 빈 데이터(제목 없음 등) 필터링
                 .filter(item => item && item.id && item.title && String(item.title).trim() !== '')
                 .map(item => {
                     const btvActual = formatDateStandard(item.btvPlusActualDate);
@@ -227,7 +225,6 @@
                     const response = await fetch(targetUrl);
                     const json = await response.json();
                     if (Array.isArray(json)) {
-                        // 여기서 normalizeData 호출 시 빈 데이터 걸러짐
                         const cleanData = normalizeData(json);
                         setData(cleanData);
                         showToast('동기화 완료');
@@ -273,7 +270,6 @@
                 } catch (e) { console.error("Save Error", e); } 
             }, [data]);
 
-            // 🔥 [추가] 데이터 변경 시 페이지 1로 리셋
             useEffect(() => {
                 setCurrentPage(1);
             }, [data.length, managementFilter, filterCategory, filterCp, searchTerm]);
@@ -537,6 +533,7 @@
                 setIsAiLoading(false);
             };
 
+            // 🔥 [수정됨] 승인 핸들러 (월정액 정보 포함 매핑)
             const handleApproveRequest = (req) => {
                 let aiData = {};
                 try {
@@ -552,6 +549,11 @@
                     cp: aiData.cp || req.cp || '',
                     category: aiData.category || req.category || '한국영화',
                     pricingPolicy: Array.isArray(aiData.pricingPolicy) ? aiData.pricingPolicy : [],
+                    
+                    // 🔥 월정액 정보 자동 입력
+                    btvPlusStatus: aiData.btvPlusStatus || 'N',
+                    btvPlusAvailableDate: aiData.btvPlusAvailableDate || '',
+                    
                     remarks: aiData.remarks || (Object.keys(aiData).length > 0 ? '' : req.details)
                 };
 
@@ -560,7 +562,8 @@
                 setIsModalOpen(true);
                 setPendingRequestId(req.id);
                 
-                if (Array.isArray(aiData.pricingPolicy) && aiData.pricingPolicy.length > 0) showToast("AI 데이터 자동 입력됨");
+                if (Array.isArray(aiData.pricingPolicy) && aiData.pricingPolicy.length > 0) showToast("가격 정책 자동 입력됨");
+                else if (aiData.btvPlusStatus === 'Y') showToast("월정액 편성 정보 입력됨");
                 else showToast("기본 정보 입력됨");
             };
 
@@ -623,7 +626,7 @@
             return (
                 <div className="flex h-screen bg-gray-50 text-gray-900 font-sans overflow-hidden">
                     <aside className={`flex flex-col bg-white border-r transition-all duration-300 ${isSidebarCollapsed ? 'w-20' : 'w-64'} fixed md:relative z-[60] h-[100dvh] ${isSidebarOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                        {/* Sidebar Content (Same as before) */}
+                        {/* Sidebar Content */}
                         <div className="p-6 border-b flex justify-between items-center h-20 shrink-0">
                             {!isSidebarCollapsed ? (
                                 <div className="flex items-center justify-between w-full">
