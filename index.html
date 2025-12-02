@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Admin (Complete Edition)</title>
+    <title>Movie Admin (Text Icon Ver)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -669,9 +669,10 @@
                                     <button onClick={()=>setIsSidebarCollapsed(false)} className="hidden md:block text-xs font-bold text-gray-400 hover:text-indigo-600">▶</button>
                                 </div>
                             )}
-                            {/* 🛠 수정됨: 닫기 버튼 텍스트 대신 'X' 아이콘으로 변경 */}
-                            <button className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded" onClick={()=>setIsSidebarOpen(false)}>
-                                <Icon name="X" size={24} />
+                            
+                            {/* 🛠 [수정 완료] 닫기 아이콘(X)을 텍스트 ✕ 로 변경하여 항상 보이게 함 */}
+                            <button className="md:hidden p-2 text-gray-500 hover:bg-gray-100 rounded font-bold text-xl" onClick={()=>setIsSidebarOpen(false)}>
+                                ✕
                             </button>
                         </div>
                         <nav className="p-2 space-y-1 flex-1 overflow-y-auto">
@@ -703,12 +704,12 @@
                     <main className="flex-1 h-full overflow-hidden flex flex-col w-full relative">
                         <div className="md:hidden p-4 border-b flex items-center bg-white shrink-0 justify-between">
                             <div className="flex items-center gap-3">
-                                {/* 🛠 수정됨: ChevronRight의 fill 속성 제거하여 아이콘 뭉개짐 해결 */}
+                                {/* 🛠 [수정 완료] 아이콘 깨짐 방지: 텍스트 ▶ 사용 */}
                                 <button 
                                     onClick={()=>setIsSidebarOpen(true)} 
-                                    className="p-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-colors"
+                                    className="p-2 bg-indigo-600 text-white rounded-lg shadow-md hover:bg-indigo-700 transition-colors font-bold"
                                 >
-                                    <Icon name="ChevronRight" size={24} />
+                                    ▶
                                 </button>
                                 <span className="font-bold text-lg">Movie Admin</span>
                             </div>
@@ -920,7 +921,7 @@
                                 <div className="animate-in fade-in duration-500">
                                     <h1 className="text-2xl font-bold mb-6">작업 이력</h1>
                                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
-                                        {/* 🛠 수정됨: 가로 스크롤(overflow-x-auto) 및 줄바꿈 방지(whitespace-nowrap) 추가 */}
+                                        {/* 🛠 [수정 완료] 가로 스크롤 적용 (overflow-x-auto) */}
                                         <div className="overflow-x-auto">
                                             <table className="w-full text-sm text-left whitespace-nowrap">
                                                 <thead className="bg-gray-50 border-b">
