@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Movie Admin (Original Title + AI Enhanced)</title>
+    <title>Movie Admin (Final Integrated Ver)</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
@@ -37,7 +37,7 @@
         // 🔑 [설정] Server-Side Logic URL
         const DEFAULT_GOOGLE_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzMyF2XbEP5V1ImkatRvGw5FHOh0MLYq0ChqhT_h0eEw2rRwnEi9-WucxYmsIRLI_b7YQ/exec";
 
-        // 🔥 Firebase 설정
+        // 🔥 Firebase 설정 (본인의 키로 교체 필요)
         const firebaseConfig = {
             apiKey: "AIzaSyDsuxadED3xkBeGf2X2caD2ZWXG0qaSVqc",
             authDomain: "movie-45532.firebaseapp.com",
@@ -89,8 +89,7 @@
                 const result = await response.json();
                 if (result.error) return { error: result.error };
                 
-                // 🛠 [수정] result.text로 감싸지 않고, 서버 응답 전체를 반환합니다.
-                // 서버가 이미 파싱된 객체({ originalTitle: ... })를 보낼 수도 있기 때문입니다.
+                // 🛠 [수정] 서버 응답(객체 or 텍스트) 전체 반환
                 return result; 
             } catch (e) { return { error: "요청 실패: " + e.message }; }
         };
@@ -213,7 +212,6 @@
             const CP_LIST = [ "CJ ENM", "롯데 엔터테인먼트", "쇼박스", "NEW", "콘텐츠판다", "케이티알파", "스튜디오산타클로스", "이놀미디어", "나인플래너스", "소니픽쳐스", "유니버설", "워너브라더스", "디즈니", "파라마운트", "더쿱분배", "엣나인필름", "영화사 진진", "티캐스트" ];
             const CATEGORY_LIST = ["한국영화", "한국영화애니메이션", "해외영화", "해외영화애니메이션", "한농협영화"];
             
-            // 🛠 [데이터 구조] originalTitle 추가
             const initialForm = { 
                 title: '', originalTitle: '', cp: '', category: '한국영화', 
                 rating: '', boxOffice: '', actors: '', awards: '', prodYear: '', 
@@ -561,11 +559,9 @@
                         let json = {};
 
                         // 🛠 [핵심 수정] 서버 응답 타입에 따른 분기 처리
-                        // Case 1: 서버(GAS)가 이미 JSON 파싱을 완료해서 객체로 보낸 경우 (성공 케이스)
                         if (res.rating || res.prodYear || res.actors || res.originalTitle) {
                             json = res;
                         } 
-                        // Case 2: 서버가 텍스트로 보낸 경우 (res.text에 문자열이 담겨옴)
                         else if (res.text) {
                             let jsonStr = res.text;
                             const jsonMatch = jsonStr.match(/\{[\s\S]*\}/);
@@ -606,37 +602,31 @@
             const handleApproveRequest = (req) => {
                 let aiData = {};
                 try {
-                    // [핵심 수정 1] JSON 파싱 로직 강화 (정규식 사용)
-                    // req.details가 문자열인 경우 JSON 객체 부분만 발췌 시도
+                    // [핵심 수정] JSON 파싱 로직 강화
                     if (typeof req.details === 'string') {
                         const jsonMatch = req.details.match(/\{[\s\S]*\}/);
                         if (jsonMatch) {
                             aiData = JSON.parse(jsonMatch[0]);
                         } else {
-                            // 매칭 안될 경우 기존 방식 시도 (혹시 모를 대비)
                             const cleanJson = req.details.replace(/```json|```/g, '').trim();
                             if (cleanJson.startsWith('{')) {
                                 aiData = JSON.parse(cleanJson);
                             }
                         }
                     } else if (typeof req.details === 'object') {
-                        // 이미 객체인 경우
                         aiData = req.details;
                     }
                 } catch (e) { 
                     console.error("JSON Parsing Fail in Request:", e); 
-                    // 파싱 실패 시 aiData는 빈 객체 {} 가 됨
                 }
 
-                // [핵심 수정 2] 누락되었던 메타데이터 필드 매핑 추가
+                // [핵심 수정] 메타데이터 필드 매핑
                 const newForm = {
                     ...initialForm,
-                    // 기본 필수 정보
                     title: aiData.title || req.title || '',
                     cp: aiData.cp || req.cp || '',
                     category: aiData.category || req.category || '한국영화',
                     
-                    // 🛠 추가된 메타데이터 (이 부분이 빠져있어서 반영이 안 되었습니다)
                     originalTitle: aiData.originalTitle || '', 
                     prodYear: aiData.prodYear || '',
                     actors: aiData.actors || '',
@@ -644,12 +634,10 @@
                     rating: aiData.rating || '',
                     boxOffice: aiData.boxOffice || '',
 
-                    // 가격 및 편성 정보
                     pricingPolicy: Array.isArray(aiData.pricingPolicy) ? aiData.pricingPolicy : [],
                     btvPlusStatus: aiData.btvPlusStatus || 'N',
                     btvPlusAvailableDate: aiData.btvPlusAvailableDate || '',
                     
-                    // 비고 (AI 파싱에 실패했거나 내용이 없으면 원본 내용을 넣음)
                     remarks: aiData.remarks || (Object.keys(aiData).length > 0 ? '' : req.details)
                 };
 
@@ -658,7 +646,6 @@
                 setIsModalOpen(true);
                 setPendingRequestId(req.id);
                 
-                // 사용자 피드백 메시지
                 if (Object.keys(aiData).length > 3) showToast("✨ AI 분석 데이터가 자동 입력되었습니다.");
                 else showToast("기본 정보가 입력되었습니다.");
             };
@@ -1139,45 +1126,24 @@
                                                 </thead>
                                                 <tbody className="divide-y">
                                                     {formData.pricingPolicy
-                                                        .filter(p => (p.mode || "RENTAL") === pricingTab) // 현재 탭(대여/소장)만 필터링
+                                                        // 1️⃣ [중요] 필터링: 현재 선택된 탭(대여/소장)과 모드가 일치하는 것만 남김
+                                                        .filter(p => (p.mode || "RENTAL") === pricingTab) 
+                                                        
+                                                        // 2️⃣ [중요] 정렬: 상품 유형 순서대로 정렬 (SPVOD > EPVOD > PVOD > RVOD > LIBRARY)
                                                         .sort((a, b) => {
-                                                            // 정렬 우선순위 정의 (SPVOD > EPVOD > PVOD > RVOD > LIBRARY)
                                                             const order = { 'SPVOD': 1, 'EPVOD': 2, 'PVOD': 3, 'RVOD': 4, 'LIBRARY': 5 };
                                                             const typeA = (a.type || '').toUpperCase();
                                                             const typeB = (b.type || '').toUpperCase();
+                                                            // 정렬 순서가 같으면(같은 SPVOD끼리 등) 시작일 기준 오름차순 정렬
+                                                            if ((order[typeA] || 99) === (order[typeB] || 99)) {
+                                                                return (a.startDate || '').localeCompare(b.startDate || '');
+                                                            }
                                                             return (order[typeA] || 99) - (order[typeB] || 99);
                                                         })
+
+                                                        // 3️⃣ 렌더링
                                                         .map((p, i) => {
-                                                            // 원본 배열에서의 인덱스를 찾기 위해 indexOf 사용 (수정/삭제 시 엉뚱한게 지워지지 않도록)
-                                                            const realIndex = formData.pricingPolicy.indexOf(p);
-                                                            
-                                                            return (
-                                                                <tr key={realIndex}>
-                                                                    <td className="p-2">
-                                                                        <select className="w-full border p-1.5 rounded" value={p.type} onChange={e=>updatePolicy(realIndex,'type',e.target.value)}>
-                                                                            <option>SPVOD</option><option>EPVOD</option><option>PVOD</option><option>RVOD</option><option>LIBRARY</option>
-                                                                        </select>
-                                                                    </td>
-                                                                    <td className="p-2"><input type="number" step="1000" className="w-full border p-1.5 rounded text-right" value={p.price} onChange={e=>updatePolicy(realIndex,'price',e.target.value)}/></td>
-                                                                    <td className="p-2"><input type="date" className="w-full border p-1.5 rounded" value={p.startDate} onChange={e=>updatePolicy(realIndex,'startDate',e.target.value)}/></td>
-                                                                    <td className="p-2"><input type="date" className="w-full border p-1.5 rounded" value={p.endDate} onChange={e=>updatePolicy(realIndex,'endDate',e.target.value)}/></td>
-                                                                    <td className="p-2 text-center text-xs text-gray-500">{getDuration(p.startDate, p.endDate)}</td>
-                                                                    <td className="p-2 text-center"><button onClick={()=>removePolicy(realIndex)} className="text-red-500 hover:text-red-700 font-bold">삭제</button></td>
-                                                                </tr>
-                                                            );
-                                                        })}
-                                                </tbody><tbody className="divide-y">
-                                                    {formData.pricingPolicy
-                                                        .filter(p => (p.mode || "RENTAL") === pricingTab) // 현재 탭(대여/소장)만 필터링
-                                                        .sort((a, b) => {
-                                                            // 정렬 우선순위 정의 (SPVOD > EPVOD > PVOD > RVOD > LIBRARY)
-                                                            const order = { 'SPVOD': 1, 'EPVOD': 2, 'PVOD': 3, 'RVOD': 4, 'LIBRARY': 5 };
-                                                            const typeA = (a.type || '').toUpperCase();
-                                                            const typeB = (b.type || '').toUpperCase();
-                                                            return (order[typeA] || 99) - (order[typeB] || 99);
-                                                        })
-                                                        .map((p, i) => {
-                                                            // 원본 배열에서의 인덱스를 찾기 위해 indexOf 사용 (수정/삭제 시 엉뚱한게 지워지지 않도록)
+                                                            // 원본 배열에서의 정확한 인덱스를 찾음 (수정/삭제 시 엉뚱한 데이터 건드리지 않도록)
                                                             const realIndex = formData.pricingPolicy.indexOf(p);
                                                             
                                                             return (
@@ -1223,7 +1189,3 @@
     </script>
 </body>
 </html>
-
-
-
-
