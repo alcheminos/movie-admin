@@ -173,24 +173,19 @@
         };
 
         const AdvancedAdminDashboard = () => {
+            // 1. 인증 및 기본 설정 State
             const [user, setUser] = useState(null);
             const [isLoggedIn, setIsLoggedIn] = useState(false);
             const [loginEmail, setLoginEmail] = useState("");
             const [loginPw, setLoginPw] = useState("");
             const [loginError, setLoginError] = useState(null);
-            const [requests, setRequests] = useState([]);
-            const [history, setHistory] = useState([]); 
-            const [selectedRequests, setSelectedRequests] = useState([]); 
-            const [reqFilterCp, setReqFilterCp] = useState('ALL');
-            const [reqFilterCategories, setReqFilterCategories] = useState(() => 
-                CATEGORY_LIST.filter(c => c !== '성인')
-            );
-            const [isCatFilterOpen, setIsCatFilterOpen] = useState(false);
+            
             const [googleScriptUrl, setGoogleScriptUrl] = useState(() => {
                 const saved = localStorage.getItem('google_script_url');
                 return (saved && saved !== "null" && saved !== "undefined" && saved.trim() !== "") ? saved : DEFAULT_GOOGLE_SCRIPT_URL;
             });
 
+            // 2. 데이터 State
             const [data, setData] = useState(() => {
                 try { 
                     const saved = localStorage.getItem('admin_data_cache');
@@ -204,15 +199,17 @@
             const [history, setHistory] = useState([]); 
             const [selectedRequests, setSelectedRequests] = useState([]); 
 
-            // Requests 필터용 State
+            // 3. 필터링 및 UI State
+            // [수정됨] 카테고리 필터 초기화 (성인 제외)
             const [reqFilterCp, setReqFilterCp] = useState('ALL');
             const [reqFilterCategories, setReqFilterCategories] = useState(() => 
                 CATEGORY_LIST.filter(c => c !== '성인')
             );
-            const [isCatFilterOpen, setIsCatFilterOpen] = useState(false); // 필터 드롭다운 토글용
+            const [isCatFilterOpen, setIsCatFilterOpen] = useState(false);
             const [reqStartDate, setReqStartDate] = useState('');
             const [reqEndDate, setReqEndDate] = useState('');
 
+            // 4. 모달 및 탭 State
             const [isModalOpen, setIsModalOpen] = useState(false);
             const [isSettingsOpen, setIsSettingsOpen] = useState(false);
             const [isSidebarOpen, setIsSidebarOpen] = useState(false); 
@@ -240,9 +237,6 @@
             
             const [currentPage, setCurrentPage] = useState(1);
             const itemsPerPage = 20;
-
-            // [변경] CP 목록 하드코딩 제거 -> 동적 생성 로직으로 변경
-            // const CP_LIST = [ ... ]; // 삭제됨
 
             // [신규] 현재 보유한 데이터 기반으로 CP 목록 동적 생성 (가나다순)
             const uniqueCpList = useMemo(() => {
@@ -1480,4 +1474,5 @@
     </script>
 </body>
 </html>
+
 
