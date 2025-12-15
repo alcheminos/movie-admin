@@ -492,6 +492,20 @@
                  return last6Months;
             }, [data]);
 
+            // [추가] Top 10 CP 계산 로직
+            const top10Cps = useMemo(() => {
+                const cpTotalCounts = {};
+                monthlyStats.forEach(m => {
+                    Object.entries(m.breakdown).forEach(([cp, count]) => {
+                        cpTotalCounts[cp] = (cpTotalCounts[cp] || 0) + count;
+                    });
+                });
+                return Object.entries(cpTotalCounts)
+                    .sort((a, b) => b[1] - a[1]) // 내림차순 정렬
+                    .slice(0, 10)
+                    .map(entry => entry[0]);
+            }, [monthlyStats]);
+
             const newReleaseList = useMemo(() => {
                 const safeData = Array.isArray(data) ? data : [];
                 return safeData.filter(d => checkIsNew(d));
@@ -923,8 +937,11 @@
                                                     const maxTotal = Math.max(...monthlyStats.map(x => x.total)) || 1;
                                                     const heightPercent = m.total > 0 ? Math.max((m.total / maxTotal) * 100, 5) : 1; 
                                                     
-                                                    // [수정] breakdown(CP별 데이터) 정렬 (알파벳순 - 범례와 일치)
-                                                    const sortedBreakdown = Object.entries(m.breakdown).sort((a, b) => a[0].localeCompare(b[0]));
+                                                    // [수정] 그래프 스택 정렬: 수량이 적은 순서대로 정렬 (오름차순) -> flex-col-reverse에 의해 큰 것이 위로 감
+                                                    const sortedBreakdown = Object.entries(m.breakdown).sort((a, b) => {
+                                                        if (a[1] === b[1]) return a[0].localeCompare(b[0]); // 수량 같으면 이름순
+                                                        return a[1] - b[1]; // 수량 오름차순 (적은게 배열 앞쪽 = 바닥, 많은게 배열 뒤쪽 = 위)
+                                                    });
 
                                                     return (
                                                         <div key={i} className="flex flex-col items-center flex-1 group relative h-full justify-end">
@@ -949,7 +966,7 @@
                                                                 })}
                                                             </div>
 
-                                                            {/* [수정] 상단 숫자 로직: Hover 시 개별 수치, 평소엔 전체 수치 */}
+                                                            {/* 상단 숫자 */}
                                                             {m.total > 0 && (
                                                                 <span className="absolute -top-6 left-1/2 -translate-x-1/2 text-xs font-bold text-indigo-600 transition-opacity duration-200 opacity-100">
                                                                     {(hoveredBar && hoveredBar.monthIndex === i) ? hoveredBar.count : m.total}
@@ -962,9 +979,9 @@
                                                 })}
                                             </div>
 
-                                            {/* [수정] 범례: CP 기준으로 표시, 폰트 크기 증가 */}
+                                            {/* [수정] 범례: Top 10 CP만 노출 */}
                                             <div className="mt-4 flex flex-wrap gap-2 justify-center">
-                                                {uniqueCpList.map(cp => (
+                                                {top10Cps.map(cp => (
                                                     <div key={cp} className="flex items-center gap-1 text-[10px] md:text-sm text-gray-500">
                                                         <span className={`w-2 h-2 rounded-full ${getCpColor(cp)}`}></span>
                                                         {cp}
