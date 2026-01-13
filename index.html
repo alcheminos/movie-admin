@@ -187,7 +187,8 @@
 
         const DEFAULT_PRICES = {
             'RENTAL': { 'SPVOD': 10000, 'EPVOD': 7000, 'PVOD': 5000, 'RVOD': 2500, 'LIBRARY': 1400 },
-            'POSSESSION': { 'SPVOD': 14900, 'EPVOD': 9900, 'PVOD': 9900, 'RVOD': 6500, 'LIBRARY': 6500 }
+            // 소장 가격 수정: SPVOD 15000, EPVOD/PVOD 10000
+            'POSSESSION': { 'SPVOD': 15000, 'EPVOD': 10000, 'PVOD': 10000, 'RVOD': 6500, 'LIBRARY': 6500 }
         };
 
         const AdvancedAdminDashboard = () => {
@@ -779,20 +780,56 @@
 
             const applyAutoHoldback = (baseDate, mode) => {
                 if (!baseDate) return;
+                
                 const existingPolicies = formData.pricingPolicy.filter(p => p.mode !== mode);
                 const cpName = formData.cp || "";
-                const epStart = baseDate; const epEnd = addDays(baseDate, 27);
-                const pvStart = addDays(epEnd, 1); const pvEnd = addDays(baseDate, 89); 
-                const rvStart = addDays(pvEnd, 1);
-                let newPol = mode === "RENTAL" 
-                    ? [{ mode: "RENTAL", type: "EPVOD", price: 7000, startDate: epStart, endDate: epEnd }, { mode: "RENTAL", type: "PVOD", price: 5000, startDate: pvStart, endDate: pvEnd }, { mode: "RENTAL", type: "RVOD", price: 2500, startDate: rvStart, endDate: "9999-12-31" }]
-                    : [{ mode: "POSSESSION", type: "EPVOD", price: 15000, startDate: epStart, endDate: epEnd }, { mode: "POSSESSION", type: "PVOD", price: 10000, startDate: pvStart, endDate: "9999-12-31" }];
+                const startDay = baseDate;
+
+                let newPol = [];
+
+                if (mode === "RENTAL") {
+                    // [대여] 기존 로직 유지
+                    const epEnd = addDays(startDay, 27);
+                    const pvStart = addDays(epEnd, 1);
+                    const pvEnd = addDays(startDay, 89);
+                    const rvStart = addDays(pvEnd, 1);
+
+                    newPol = [
+                        { mode: "RENTAL", type: "EPVOD", price: 7000, startDate: startDay, endDate: epEnd },
+                        { mode: "RENTAL", type: "PVOD", price: 5000, startDate: pvStart, endDate: pvEnd },
+                        { mode: "RENTAL", type: "RVOD", price: 2500, startDate: rvStart, endDate: "9999-12-31" }
+                    ];
+                } else {
+                    // [소장] 수정됨: SPVOD(1.5만) -> EPVOD(1만) -> PVOD(1만)
+                    
+                    // 1. SPVOD: 15,000원 (21일간)
+                    const spEnd = addDays(startDay, 21);
+                    
+                    // 2. EPVOD: 10,000원 (22일 ~ 27일, 4주차 채움)
+                    const epStart = addDays(spEnd, 1);
+                    const epEnd = addDays(startDay, 27);
+
+                    // 3. PVOD: 10,000원 (28일 이후 계속)
+                    const pvStart = addDays(epEnd, 1);
+
+                    newPol = [
+                        { mode: "POSSESSION", type: "SPVOD", price: 15000, startDate: startDay, endDate: spEnd },
+                        { mode: "POSSESSION", type: "EPVOD", price: 10000, startDate: epStart, endDate: epEnd },
+                        { mode: "POSSESSION", type: "PVOD", price: 10000, startDate: pvStart, endDate: "9999-12-31" }
+                    ];
+                }
+
+                // B tv+ 편성 로직 (렌탈일 경우만 적용)
                 let newBtv = {};
                 if (mode === "RENTAL") { 
-                    let btvBase = cpName.includes("스튜디오산타") ? pvStart : epStart;
+                    const epEnd = addDays(startDay, 27);
+                    const pvStart = addDays(epEnd, 1);
+                    
+                    let btvBase = cpName.includes("스튜디오산타") ? pvStart : startDay;
                     let avail = cpName.includes("CJ ENM") ? addMonths(btvBase, 9) : (["롯데 엔터", "쇼박스", "콘텐츠판다", "케이티알파", "롯데"].some(c => cpName.includes(c)) ? addDays(btvBase, 42) : btvBase);
                     newBtv = { btvPlusStatus: 'Y', btvPlusAvailableDate: avail, btvPlusActualDate: getNextTueOrFri(avail) };
                 }
+
                 setFormData(prev => ({ ...prev, ...newBtv, pricingPolicy: [...existingPolicies, ...newPol] }));
             };
             
@@ -1485,3 +1522,4 @@
     </script>
 </body>
 </html>
+
