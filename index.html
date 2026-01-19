@@ -924,6 +924,31 @@
                     ] 
                 });
             };
+            const copyRentalToPossession = () => {
+                if (!confirm("현재 '대여' 일정을 '소장' 탭으로 복사하시겠습니까?\n기존 소장 일정은 삭제되고 대여 일정과 동일하게 변경됩니다.")) return;
+            
+                // 1. 현재 대여 정책들만 가져오기
+                const rentalPolicies = formData.pricingPolicy.filter(p => (p.mode || "RENTAL") === "RENTAL");
+                
+                // 2. 소장 모드로 변환 (가격은 소장 기본가 적용)
+                const copiedPolicies = rentalPolicies.map(p => ({
+                    ...p,
+                    mode: "POSSESSION",
+                    price: (DEFAULT_PRICES["POSSESSION"] && DEFAULT_PRICES["POSSESSION"][p.type]) || p.price
+                }));
+            
+                // 3. 기존 대여 정책은 유지하고, 소장 정책만 교체
+                setFormData({
+                    ...formData,
+                    pricingPolicy: [
+                        ...rentalPolicies,
+                        ...copiedPolicies
+                    ]
+                });
+                
+                showToast("✨ 소장 일정으로 복사 완료!");
+                setPricingTab("POSSESSION"); // 편의를 위해 소장 탭으로 이동
+            };
             const removePolicy = (i) => setFormData({ ...formData, pricingPolicy: formData.pricingPolicy.filter((_, idx) => idx !== i) });
 
             const safeData = Array.isArray(data) ? data : [];
@@ -1619,6 +1644,17 @@
                                             </table>
                                             <button onClick={()=>addPolicy(pricingTab)} className="w-full py-3 bg-gray-50 text-indigo-600 font-bold text-sm hover:bg-indigo-50 transition border-t">+ 추가</button>
                                         </div>
+                                        <div className="mt-4 flex justify-between items-center">
+                                            {/* 대여(RENTAL) 탭일 때만 복사 버튼이 보이도록 설정합니다 */}
+                                            {pricingTab === 'RENTAL' && (
+                                                <button 
+                                                    onClick={copyRentalToPossession}
+                                                    className="text-xs bg-amber-50 text-amber-600 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 transition flex items-center gap-1"
+                                                >
+                                                    <Icon name="Copy" size={14}/> 대여 일정을 소장으로 복사
+                                                </button>
+                                            )}
+                                        </div>
                                         <div className="mt-4 flex justify-between items-center bg-indigo-50 p-3 rounded text-sm text-indigo-800"><span className="flex gap-1 items-center"><Icon name="Calculator"/> 자동 스케줄링</span><input type="date" className="border p-1 rounded text-xs" onChange={(e)=>applyAutoHoldback(e.target.value, pricingTab)}/></div>
                                     </section>
                                     <section className="mt-6">
@@ -1643,8 +1679,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
