@@ -876,27 +876,39 @@
                 setFormData({ ...formData, pricingPolicy: p }); 
             };
             const addPolicy = (mode) => {
-                const sameModePolicies = formData.pricingPolicy.filter(p => p.mode === mode);
+                // 1. 현재 모드(대여/소장)의 정책들만 필터링
+                const sameModePolicies = formData.pricingPolicy.filter(p => (p.mode || "RENTAL") === mode);
                 
-                // 1. 기본 시작일 설정 (기본값: 오늘)
-                let nextStartDate = getToday();
+                // 2. 신작 출시 흐름 정의
+                const allTypes = ['SPVOD', 'EPVOD', 'PVOD', 'RVOD', 'LIBRARY'];
+                
+                let nextType = 'SPVOD'; // 기본값 (데이터가 없을 때)
+                let nextStartDate = getToday(); // 기본값
             
-                // 2. 기존 정책이 있는 경우, 가장 늦은 종료일 찾기
+                // 3. 기존 데이터가 있는 경우 스마트 분석
                 if (sameModePolicies.length > 0) {
-                    // 종료일 기준으로 내림차순 정렬하여 가장 늦은 날짜를 가져옴
-                    const sortedByEnd = [...sameModePolicies].sort((a, b) => b.endDate.localeCompare(a.endDate));
-                    const latestEndDate = sortedByEnd[0].endDate;
+                    // 종료일 기준으로 정렬하여 가장 마지막(최신) 정책 찾기
+                    const sorted = [...sameModePolicies].sort((a, b) => b.endDate.localeCompare(a.endDate));
+                    const latestPolicy = sorted[0];
+                    
+                    // 마지막 정책의 유형 인덱스를 찾아 다음 단계 결정
+                    const currentIndex = allTypes.indexOf(latestPolicy.type);
+                    if (currentIndex !== -1 && currentIndex < allTypes.length - 1) {
+                        // 다음 단계가 있으면 해당 단계 추천 (예: EPVOD -> PVOD)
+                        nextType = allTypes[currentIndex + 1];
+                    } else {
+                        // 이미 LIBRARY 단계라면 동일하게 유지
+                        nextType = latestPolicy.type;
+                    }
             
-                    // 종료일이 유효하고 '9999-12-31'이 아닌 경우에만 +1일 계산
-                    if (latestEndDate && latestEndDate !== '9999-12-31') {
-                        nextStartDate = addDays(latestEndDate, 1);
+                    // 마지막 정책의 종료일이 무제한(9999)이 아니면 +1일 계산
+                    if (latestPolicy.endDate && latestPolicy.endDate !== '9999-12-31') {
+                        nextStartDate = addDays(latestPolicy.endDate, 1);
                     }
                 }
             
-                const currentTypes = sameModePolicies.map(p => p.type);
-                const allTypes = ['RVOD', 'PVOD', 'EPVOD', 'SPVOD', 'LIBRARY']; 
-                const nextType = allTypes.find(t => !currentTypes.includes(t)) || 'RVOD';
-                const defaultPrice = DEFAULT_PRICES[mode][nextType] || 0;
+                // 4. 결정된 값으로 데이터 업데이트
+                const defaultPrice = (DEFAULT_PRICES[mode] && DEFAULT_PRICES[mode][nextType]) || 0;
             
                 setFormData({ 
                     ...formData, 
@@ -906,7 +918,7 @@
                             mode, 
                             type: nextType, 
                             price: defaultPrice, 
-                            startDate: nextStartDate, // 자동 계산된 시작일 적용
+                            startDate: nextStartDate, 
                             endDate: '9999-12-31' 
                         }
                     ] 
@@ -1631,6 +1643,7 @@
     </script>
 </body>
 </html>
+
 
 
 
