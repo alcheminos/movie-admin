@@ -876,19 +876,39 @@
                 setFormData({ ...formData, pricingPolicy: p }); 
             };
             const addPolicy = (mode) => {
-                const currentTypes = formData.pricingPolicy
-                    .filter(p => p.mode === mode)
-                    .map(p => p.type);
-    
+                const sameModePolicies = formData.pricingPolicy.filter(p => p.mode === mode);
+                
+                // 1. 기본 시작일 설정 (기본값: 오늘)
+                let nextStartDate = getToday();
+            
+                // 2. 기존 정책이 있는 경우, 가장 늦은 종료일 찾기
+                if (sameModePolicies.length > 0) {
+                    // 종료일 기준으로 내림차순 정렬하여 가장 늦은 날짜를 가져옴
+                    const sortedByEnd = [...sameModePolicies].sort((a, b) => b.endDate.localeCompare(a.endDate));
+                    const latestEndDate = sortedByEnd[0].endDate;
+            
+                    // 종료일이 유효하고 '9999-12-31'이 아닌 경우에만 +1일 계산
+                    if (latestEndDate && latestEndDate !== '9999-12-31') {
+                        nextStartDate = addDays(latestEndDate, 1);
+                    }
+                }
+            
+                const currentTypes = sameModePolicies.map(p => p.type);
                 const allTypes = ['RVOD', 'PVOD', 'EPVOD', 'SPVOD', 'LIBRARY']; 
                 const nextType = allTypes.find(t => !currentTypes.includes(t)) || 'RVOD';
                 const defaultPrice = DEFAULT_PRICES[mode][nextType] || 0;
-
+            
                 setFormData({ 
                     ...formData, 
                     pricingPolicy: [
                         ...formData.pricingPolicy, 
-                        { mode, type: nextType, price: defaultPrice, startDate: getToday(), endDate: '9999-12-31' }
+                        { 
+                            mode, 
+                            type: nextType, 
+                            price: defaultPrice, 
+                            startDate: nextStartDate, // 자동 계산된 시작일 적용
+                            endDate: '9999-12-31' 
+                        }
                     ] 
                 });
             };
@@ -1589,5 +1609,6 @@
     </script>
 </body>
 </html>
+
 
 
