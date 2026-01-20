@@ -817,7 +817,7 @@
                 
                 let effectiveBaseDate = baseDate;
 
-                // [핵심 수정] SPVOD가 있으면, 버튼에서 날짜를 안 보내줘도(null) 알아서 종료일+1로 설정함
+                // SPVOD가 있으면 종료일 다음날을 강제로 기준일로 설정
                 if (spvodPolicy) {
                     if (!spvodPolicy.endDate || spvodPolicy.endDate === '9999-12-31') {
                         alert("SPVOD의 종료일을 먼저 정확한 날짜로 입력해주세요.");
@@ -826,40 +826,40 @@
                     effectiveBaseDate = addDays(spvodPolicy.endDate, 1);
                 }
 
-                // SPVOD도 없고, 날짜 선택도 안 했다면 여기서 종료
                 if (!effectiveBaseDate) return;
 
                 let newPolicies = [];
                 let btvBaseDate = ''; 
 
                 if (spvodPolicy) {
-                    // [Case A] SPVOD 있음 -> EPVOD부터 시작
+                    // [Case A] SPVOD 있음 -> EPVOD(27일) -> PVOD(89일) -> RVOD(무제한)
                     const epStart = effectiveBaseDate;
                     const epEnd = addDays(epStart, 27);
+                    
                     const pvStart = addDays(epEnd, 1);
-                    const pvEnd = addDays(epStart, 89);
+                    const pvEnd = addDays(epStart, 89); // 규칙: EPVOD 시작일 기준 + 89일
+                    
                     const rvStart = addDays(pvEnd, 1);
-                    const rvEnd = addDays(rvStart, 179);
+                    // RVOD 종료일은 무제한, LIBRARY 생성 안 함
 
                     newPolicies = [
                         spvodPolicy, // 기존 SPVOD 유지
                         { mode, type: 'EPVOD', price: DEFAULT_PRICES[mode]['EPVOD'], startDate: epStart, endDate: epEnd },
                         { mode, type: 'PVOD', price: DEFAULT_PRICES[mode]['PVOD'], startDate: pvStart, endDate: pvEnd },
-                        { mode, type: 'RVOD', price: DEFAULT_PRICES[mode]['RVOD'], startDate: rvStart, endDate: rvEnd },
-                        { mode, type: 'LIBRARY', price: DEFAULT_PRICES[mode]['LIBRARY'], startDate: addDays(rvEnd, 1), endDate: '9999-12-31' }
+                        { mode, type: 'RVOD', price: DEFAULT_PRICES[mode]['RVOD'], startDate: rvStart, endDate: '9999-12-31' }
                     ];
                     btvBaseDate = epStart; 
                 } else {
-                    // [Case B] SPVOD 없음 -> PVOD부터 시작
+                    // [Case B] SPVOD 없음 -> PVOD(89일) -> RVOD(무제한)
                     const pvStart = effectiveBaseDate;
                     const pvEnd = addDays(pvStart, 89);
+                    
                     const rvStart = addDays(pvEnd, 1);
-                    const rvEnd = addDays(rvStart, 179);
+                    // RVOD 종료일은 무제한, LIBRARY 생성 안 함
 
                     newPolicies = [
                         { mode, type: 'PVOD', price: DEFAULT_PRICES[mode]['PVOD'], startDate: pvStart, endDate: pvEnd },
-                        { mode, type: 'RVOD', price: DEFAULT_PRICES[mode]['RVOD'], startDate: rvStart, endDate: rvEnd },
-                        { mode, type: 'LIBRARY', price: DEFAULT_PRICES[mode]['LIBRARY'], startDate: addDays(rvEnd, 1), endDate: '9999-12-31' }
+                        { mode, type: 'RVOD', price: DEFAULT_PRICES[mode]['RVOD'], startDate: rvStart, endDate: '9999-12-31' }
                     ];
                     btvBaseDate = pvStart;
                 }
@@ -1741,5 +1741,6 @@
     </script>
 </body>
 </html>
+
 
 
