@@ -1683,7 +1683,40 @@
                                                 </button>
                                             )}
                                         </div>
-                                        <div className="mt-4 flex justify-between items-center bg-indigo-50 p-3 rounded text-sm text-indigo-800"><span className="flex gap-1 items-center"><Icon name="Calculator"/> 자동 스케줄링</span><input type="date" className="border p-1 rounded text-xs" onChange={(e)=>applyAutoHoldback(e.target.value, pricingTab)}/></div>
+                                        <section className="mt-6 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h4 className="font-bold text-indigo-900 flex items-center gap-2 text-sm">
+                                                    <Icon name="Calculator" size={16}/> 자동 홀드백 스케줄링
+                                                </h4>
+                                                <span className="text-[10px] font-bold px-2 py-1 bg-white border border-indigo-200 text-indigo-600 rounded-md shadow-sm">
+                                                    {formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab) 
+                                                        ? "💡 SPVOD 감지: 종료일 기준 자동 연결" 
+                                                        : "📅 SPVOD 없음: 선택일 기준 PVOD 시작"}
+                                                </span>
+                                            </div>
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1">
+                                                    <input 
+                                                        type="date" 
+                                                        className={`w-full border p-2 rounded-lg text-sm ${formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                                                        value={formData.pricingPolicy.find(p => p.type === 'SPVOD' && p.mode === pricingTab)?.endDate ? addDays(formData.pricingPolicy.find(p => p.type === 'SPVOD' && p.mode === pricingTab).endDate, 1) : ''}
+                                                        disabled={formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab)}
+                                                        onChange={(e) => applyAutoHoldback(e.target.value, pricingTab)}
+                                                    />
+                                                </div>
+                                                {formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab) && (
+                                                    <button 
+                                                        onClick={() => applyAutoHoldback(null, pricingTab)}
+                                                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-700 transition whitespace-nowrap"
+                                                    >
+                                                        스케줄 생성
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <p className="mt-2 text-[10px] text-indigo-400 leading-relaxed">
+                                                * SPVOD 유무에 따라 EPVOD 또는 PVOD부터 일정이 구성됩니다.
+                                            </p>
+                                        </section>
                                     </section>
                                     <section className="mt-6">
                                         <h4 className="font-bold text-lg flex items-center gap-2 mb-2 text-gray-700"><Icon name="FileText"/> 비고 (선택)</h4>
@@ -1707,3 +1740,4 @@
     </script>
 </body>
 </html>
+
