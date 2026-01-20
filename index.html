@@ -391,12 +391,14 @@
                         if (reqEndDate && reqDate > reqEndDate) return false;
                     }
                     
-                    // 👉 [추가된 부분] 타이틀 검색 필터 (대소문자 무시)
-                    if (reqSearchTerm && !req.title.toLowerCase().includes(reqSearchTerm.toLowerCase())) return false;
+                    // 👉 [수정됨] 타이틀 검색 필터 (안전장치 추가: title이 없으면 빈문자열로 처리)
+                    const title = req.title ? String(req.title).toLowerCase() : '';
+                    const search = reqSearchTerm.toLowerCase();
+                    if (reqSearchTerm && !title.includes(search)) return false;
 
                     return true;
                 });
-            }, [requests, reqFilterCp, reqFilterCategories, reqStartDate, reqEndDate, reqSearchTerm]); // 👈 여기에 reqSearchTerm 추가됨
+            }, [requests, reqFilterCp, reqFilterCategories, reqStartDate, reqEndDate, reqSearchTerm]);
 
             const handleLogin = async (e) => {
                 e.preventDefault(); setLoginError(null);
@@ -1772,7 +1774,3 @@
     </script>
 </body>
 </html>
-
-
-
-
