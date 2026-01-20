@@ -809,41 +809,49 @@
             };
 
             const applyAutoHoldback = (baseDate, mode) => {
-                if (!baseDate) return;
-            
                 const cpName = (formData.cp || "").trim();
                 const existingPolicies = formData.pricingPolicy || [];
-            
-                // 1. 기존 SPVOD 보존 (요청사항 4번 해결)
+                
+                // [보안] 기존 SPVOD가 있는지 확인 (요청하신 4번 항목 핵심 로직)
                 const spvodPolicy = existingPolicies.find(p => p.type === 'SPVOD' && p.mode === mode);
             
+                let effectiveBaseDate = baseDate;
+                
+                // SPVOD가 있다면 사용자가 선택한 날짜 대신 SPVOD 종료일 다음날을 기준점으로 강제 설정
+                if (spvodPolicy) {
+                    if (!spvodPolicy.endDate || spvodPolicy.endDate === '9999-12-31') {
+                        alert("SPVOD의 종료일을 먼저 정확한 날짜로 입력해주세요.");
+                        return;
+                    }
+                    effectiveBaseDate = addDays(spvodPolicy.endDate, 1);
+                }
+            
+                if (!effectiveBaseDate) return;
+            
                 let newPolicies = [];
-                let btvBaseDate = ''; // B tv+ 계산의 뿌리가 되는 날짜
+                let btvBaseDate = ''; 
             
                 if (spvodPolicy) {
-                    // [Case A] SPVOD가 있는 경우 -> EPVOD부터 시작
-                    const epStart = addDays(spvodPolicy.endDate, 1);
+                    // [Case A] SPVOD 있음 -> EPVOD 시작 (27일/89일 규칙 적용)
+                    const epStart = effectiveBaseDate;
                     const epEnd = addDays(epStart, 27);
-            
                     const pvStart = addDays(epEnd, 1);
-                    const pvEnd = addDays(epStart, 89); // 규칙: EPVOD 시작일 기준 + 89일
-            
+                    const pvEnd = addDays(epStart, 89);
                     const rvStart = addDays(pvEnd, 1);
                     const rvEnd = addDays(rvStart, 179);
             
                     newPolicies = [
-                        spvodPolicy, // 기존 SPVOD 유지
+                        spvodPolicy, // 기존 SPVOD 보존
                         { mode, type: 'EPVOD', price: DEFAULT_PRICES[mode]['EPVOD'], startDate: epStart, endDate: epEnd },
                         { mode, type: 'PVOD', price: DEFAULT_PRICES[mode]['PVOD'], startDate: pvStart, endDate: pvEnd },
                         { mode, type: 'RVOD', price: DEFAULT_PRICES[mode]['RVOD'], startDate: rvStart, endDate: rvEnd },
                         { mode, type: 'LIBRARY', price: DEFAULT_PRICES[mode]['LIBRARY'], startDate: addDays(rvEnd, 1), endDate: '9999-12-31' }
                     ];
-                    btvBaseDate = epStart; // EPVOD 진행 시 모든 기준은 EPVOD 시작일
+                    btvBaseDate = epStart; 
                 } else {
-                    // [Case B] SPVOD가 없는 경우 -> PVOD부터 시작 (요청사항)
-                    const pvStart = baseDate;
+                    // [Case B] SPVOD 없음 -> PVOD부터 시작
+                    const pvStart = effectiveBaseDate;
                     const pvEnd = addDays(pvStart, 89);
-            
                     const rvStart = addDays(pvEnd, 1);
                     const rvEnd = addDays(rvStart, 179);
             
@@ -852,43 +860,36 @@
                         { mode, type: 'RVOD', price: DEFAULT_PRICES[mode]['RVOD'], startDate: rvStart, endDate: rvEnd },
                         { mode, type: 'LIBRARY', price: DEFAULT_PRICES[mode]['LIBRARY'], startDate: addDays(rvEnd, 1), endDate: '9999-12-31' }
                     ];
-                    btvBaseDate = pvStart; // EPVOD 미진행 시 PVOD 시작일 기준
+                    btvBaseDate = pvStart;
                 }
             
-                // 2. B tv+ 편성 로직 (국내 CP 특화)
+                // [B tv+ 편성 로직] CP별 윈도우 계산
                 let btvUpdate = {};
                 if (cpName) {
                     let availDate = btvBaseDate;
-            
-                    // 예외: 스튜디오산타는 EPVOD 여부와 상관없이 PVOD 시작일 기준
                     if (cpName.includes("스튜디오산타")) {
                         const pvod = newPolicies.find(p => p.type === 'PVOD');
                         availDate = pvod ? pvod.startDate : btvBaseDate;
-                    } 
-                    else if (cpName.includes("CJ ENM")) {
+                    } else if (cpName.includes("CJ ENM")) {
                         availDate = addMonths(btvBaseDate, 9);
-                    } 
-                    else if (["롯데", "쇼박스", "콘텐츠판다", "케이티알파"].some(c => cpName.includes(c))) {
+                    } else if (["롯데", "쇼박스", "콘텐츠판다", "케이티알파"].some(c => cpName.includes(c))) {
                         availDate = addDays(btvBaseDate, 42);
                     }
-                    // 그 외 기타 국내 CP는 availDate = btvBaseDate 유지
             
                     btvUpdate = {
                         btvPlusStatus: 'Y',
                         btvPlusAvailableDate: availDate,
-                        btvPlusActualDate: getNextTueOrFri(availDate) // 화, 금 보정 함수 사용
+                        btvPlusActualDate: getNextTueOrFri(availDate)
                     };
                 }
             
-                // 3. 결과 합치기 (현재 모드 외의 정책은 보존)
                 const otherModePolicies = existingPolicies.filter(p => p.mode !== mode);
                 setFormData(prev => ({
                     ...prev,
                     ...btvUpdate,
                     pricingPolicy: [...otherModePolicies, ...newPolicies]
                 }));
-                
-                showToast(`📅 ${cpName} 기준 자동 스케줄링 완료`);
+                showToast(`📅 자동 스케줄링 완료`);
             };
             
             const updatePolicy = (i, f, v) => { 
@@ -1683,8 +1684,44 @@
                                                 </button>
                                             )}
                                         </div>
-                                        <div className="mt-4 flex justify-between items-center bg-indigo-50 p-3 rounded text-sm text-indigo-800"><span className="flex gap-1 items-center"><Icon name="Calculator"/> 자동 스케줄링</span><input type="date" className="border p-1 rounded text-xs" onChange={(e)=>applyAutoHoldback(e.target.value, pricingTab)}/></div>
-                                    </section>
+                                        <section className="mt-6 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h4 className="font-bold text-indigo-900 flex items-center gap-2 text-sm">
+                                                    <Icon name="Calculator" size={16}/> 자동 홀드백 스케줄링
+                                                </h4>
+                                                {/* SPVOD 존재 여부에 따라 가이드 문구 자동 변경 */}
+                                                <span className="text-[10px] font-bold px-2 py-1 bg-white border border-indigo-200 text-indigo-600 rounded-md shadow-sm">
+                                                    {formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab) 
+                                                        ? "💡 SPVOD 감지: 종료일 기준 자동 연결" 
+                                                        : "📅 SPVOD 없음: 선택일 기준 PVOD 시작"}
+                                                </span>
+                                            </div>
+                                        
+                                            <div className="flex items-center gap-3">
+                                                <div className="flex-1">
+                                                    <input 
+                                                        type="date" 
+                                                        className={`w-full border p-2 rounded-lg text-sm ${formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab) ? 'bg-gray-100 text-gray-400 cursor-not-allowed' : 'bg-white'}`}
+                                                        /* SPVOD가 있으면 종료일 다음날을 자동으로 표시 */
+                                                        value={formData.pricingPolicy.find(p => p.type === 'SPVOD' && p.mode === pricingTab)?.endDate ? addDays(formData.pricingPolicy.find(p => p.type === 'SPVOD' && p.mode === pricingTab).endDate, 1) : ''}
+                                                        disabled={formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab)}
+                                                        onChange={(e) => applyAutoHoldback(e.target.value, pricingTab)}
+                                                    />
+                                                </div>
+                                                {/* SPVOD가 있을 때만 명시적인 실행 버튼을 노출하여 직관성 강화 */}
+                                                {formData.pricingPolicy.some(p => p.type === 'SPVOD' && p.mode === pricingTab) && (
+                                                    <button 
+                                                        onClick={() => applyAutoHoldback(null, pricingTab)}
+                                                        className="px-4 py-2 bg-indigo-600 text-white rounded-lg font-bold text-sm shadow-sm hover:bg-indigo-700 transition whitespace-nowrap"
+                                                    >
+                                                        스케줄 생성
+                                                    </button>
+                                                )}
+                                            </div>
+                                            <p className="mt-2 text-[10px] text-indigo-400 leading-relaxed">
+                                                * SPVOD 유무에 따라 EPVOD 또는 PVOD부터 일정이 구성됩니다.
+                                            </p>
+                                        </section>
                                     <section className="mt-6">
                                         <h4 className="font-bold text-lg flex items-center gap-2 mb-2 text-gray-700"><Icon name="FileText"/> 비고 (선택)</h4>
                                         <textarea className="w-full border p-3 rounded-lg bg-gray-50 text-sm h-24 resize-none focus:bg-white transition" placeholder="특이사항이나 메모를 입력하세요 (구글 시트 AW열 저장)" value={formData.remarks} onChange={e=>setFormData({...formData, remarks:e.target.value})}></textarea>
@@ -1707,4 +1744,5 @@
     </script>
 </body>
 </html>
+
 
