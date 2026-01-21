@@ -681,12 +681,38 @@
 
             const handleSave = () => {
                 setValidationError(null);
+                
+                // 1. 필수값 체크
                 if (!formData.title || !formData.cp) return setValidationError('필수값 누락');
+                
+                // 2. 정책 중복 체크
                 if (checkPolicyOverlap(formData.pricingPolicy)) return setValidationError('정책 기간 중복');
                 const rangeOverlap = checkPolicyOverlap(formData.pricingPolicy);
                 if (rangeOverlap) return setValidationError(rangeOverlap);
                 const typeDup = checkPolicyTypeDuplication(formData.pricingPolicy);
                 if (typeDup) return setValidationError(typeDup);
+
+                // ---------------------------------------------------------
+                // [신규] 관객수 1만명 이상인데 '소장' 정책이 없는 경우 체크
+                // ---------------------------------------------------------
+                const audienceStr = String(formData.boxOffice || '').replace(/[^0-9]/g, ''); // 숫자만 추출
+                const audienceNum = parseInt(audienceStr, 10); // 정수로 변환
+                
+                // 소장(POSSESSION) 모드의 정책이 하나라도 있는지 확인
+                const hasPossession = formData.pricingPolicy.some(p => p.mode === 'POSSESSION');
+
+                if (!isNaN(audienceNum) && audienceNum >= 10000 && !hasPossession) {
+                    const confirmMsg = `📢 [주의] 관객수가 1만 명 이상(${audienceNum.toLocaleString()}명)입니다.\n\n규정상 '소장(POSSESSION)' 편성이 필수입니다.\n현재 소장 가격이 설정되지 않았습니다.\n\n그래도 저장하시겠습니까?`;
+                    
+                    // 취소(N)를 누르면 저장 중단하고 함수 종료
+                    if (!confirm(confirmMsg)) {
+                        // 사용자가 소장 탭을 바로 볼 수 있게 탭 이동 편의 제공
+                        setPricingTab('POSSESSION'); 
+                        return; 
+                    }
+                }
+                // ---------------------------------------------------------
+
                 const now = new Date().toLocaleString();
                 let savedItem;
                 let actionType = currentMode === 'add' ? 'CREATE' : 'UPDATE';
@@ -2111,6 +2137,7 @@
     </script>
 </body>
 </html>
+
 
 
 
