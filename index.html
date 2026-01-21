@@ -567,6 +567,8 @@
                 else { setManagementFilter(type); setActiveTab('management'); }
             };
             const handleTitleClick = (item) => {
+                setKoficCandidates([]);
+                setShowCandidateList(false);
                 setCurrentMode('edit');
                 setSelectedId(item.id);
                 setFormData({ ...item });
@@ -620,6 +622,9 @@
             const handleCloseModal = () => {
                 setIsModalOpen(false);
                 setValidationError(null);
+                setKoficCandidates([]);      // 검색 목록 비우기
+                setShowCandidateList(false); // 목록 숨기기
+                setIsSearchingKofic(false);  // 로딩 상태 끄기
             };
 
             const handleSave = () => {
@@ -1421,7 +1426,21 @@
                                                 <option value="id">최신순</option><option value="title">제목순</option><option value="cp">CP사순</option>
                                             </select>
                                             <div className="relative flex-1"><Icon name="Search" className="absolute left-3 top-2.5 text-gray-400" size={16}/><input type="text" placeholder="제목 또는 CP 검색..." className="w-full pl-9 border rounded-lg py-2 text-sm shadow-sm" value={searchTerm} onChange={e=>setSearchTerm(e.target.value)}/></div>
-                                            <button onClick={()=>{setCurrentMode('add'); setFormData(initialForm); setIsModalOpen(true); setValidationError(null);}} className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 whitespace-nowrap"><Icon name="Plus"/> 등록</button>
+                                            <button 
+                                                onClick={()=>{
+                                                    // [추가] 상태 초기화
+                                                    setKoficCandidates([]);
+                                                    setShowCandidateList(false);
+                                                    
+                                                    setCurrentMode('add'); 
+                                                    setFormData(initialForm); 
+                                                    setIsModalOpen(true); 
+                                                    setValidationError(null);
+                                                }} 
+                                                className="flex items-center justify-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg font-bold shadow hover:bg-indigo-700 whitespace-nowrap"
+                                            >
+                                                <Icon name="Plus"/> 등록
+                                            </button>
                                         </div>
                                     </header>
                                     <div className="bg-white rounded-xl border shadow-sm overflow-hidden flex flex-col min-h-[500px]">
@@ -2081,6 +2100,7 @@
     </script>
 </body>
 </html>
+
 
 
 
