@@ -1910,18 +1910,22 @@
                                                 />
                                             </div>
 
-                                            {/* [신규] AI 보완 버튼 (섹션 하단 배치) */}
-                                            <div className="md:col-span-4 mt-2">
+                                            {/* [수정] AI 보완 버튼 (스타일 개선) */}
+                                            <div className="md:col-span-4 mt-4">
                                                 <button 
                                                     onClick={handleAiMeta} 
                                                     disabled={isAiLoading}
-                                                    className="w-full py-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 font-bold hover:bg-indigo-100 hover:shadow-md transition flex items-center justify-center gap-2 ai-button text-white border-none"
+                                                    // 배경색 충돌하는 클래스들(bg-indigo-50 등)을 제거하고 ai-button과 text-white만 남김
+                                                    className="w-full py-3 rounded-xl font-bold shadow-md hover:shadow-lg hover:scale-[1.01] transition-all duration-200 flex items-center justify-center gap-2 ai-button text-white border-none"
                                                 >
-                                                    {isAiLoading ? <span className="animate-spin">⌛</span> : <Icon name="Sparkles" size={16}/>}
-                                                    {isAiLoading ? "AI가 정보를 분석 중입니다..." : "AI 데이터 보완 (수상 이력 / 누락 정보 채우기)"}
+                                                    {isAiLoading ? <span className="animate-spin">⌛</span> : <Icon name="Sparkles" size={18}/>}
+                                                    <span className="text-sm md:text-base">
+                                                        {isAiLoading ? "AI가 정보를 분석 중입니다..." : "AI 데이터 보완 (수상 이력 / 누락 정보 채우기)"}
+                                                    </span>
                                                 </button>
-                                                <p className="text-[10px] text-center text-gray-400 mt-2">
-                                                    * 영진위 검색 후에도 비어있는 배우/관객수 정보와 수상 이력을 AI가 찾아줍니다.
+                                                {/* 설명 텍스트: 폰트 키움 (text-[10px] -> text-xs), 색상 진하게 (text-gray-400 -> text-gray-600) */}
+                                                <p className="text-xs text-center text-gray-600 mt-3 font-medium">
+                                                    * 영진위 검색 후에도 비어있는 <span className="text-indigo-600 font-bold">주연배우/관객수</span> 정보와 <span className="text-indigo-600 font-bold">수상 이력</span>을 AI가 자동으로 찾아 채워줍니다.
                                                 </p>
                                             </div>
                                         </div>
@@ -2107,6 +2111,7 @@
     </script>
 </body>
 </html>
+
 
 
 
