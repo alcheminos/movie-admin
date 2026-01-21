@@ -598,11 +598,32 @@
                 else { setManagementFilter(type); setActiveTab('management'); }
             };
             const handleTitleClick = (item) => {
-                setKoficCandidates([]);
-                setShowCandidateList(false);
+                // 기존 로직 유지 (검색 결과 초기화)
+                if (typeof setKoficCandidates === 'function') setKoficCandidates([]);
+                if (typeof setShowCandidateList === 'function') setShowCandidateList(false);
+                
                 setCurrentMode('edit');
                 setSelectedId(item.id);
-                setFormData({ ...item });
+                
+                // [수정된 부분] 데이터 안전하게 채워넣기 (방어 코드 추가)
+                setFormData({ 
+                    ...item,
+                    // 필수 필드들이 null일 경우 빈 문자열로 대체
+                    title: item.title || '',
+                    originalTitle: item.originalTitle || '',
+                    cp: item.cp || '',
+                    category: item.category || '기타',
+                    
+                    // 🔥 [핵심] pricingPolicy가 없거나 배열이 아니면 빈 배열([])로 강제 할당
+                    // 이렇게 해야 팝업을 열 때 .map() 함수 에러가 안 남
+                    pricingPolicy: Array.isArray(item.pricingPolicy) ? item.pricingPolicy : [],
+                    
+                    btvPlusStatus: item.btvPlusStatus || 'N',
+                    btvPlusAvailableDate: item.btvPlusAvailableDate || '',
+                    btvPlusActualDate: item.btvPlusActualDate || '',
+                    remarks: item.remarks || ''
+                });
+                
                 setIsModalOpen(true);
                 setValidationError(null);
             };
@@ -2039,7 +2060,8 @@
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y">
-                                                    {formData.pricingPolicy
+                                                    {/* 👇 여기 ( || [] )가 추가된 것이 핵심입니다! 에러를 막아줍니다. */}
+                                                    {(formData.pricingPolicy || [])
                                                         .filter(p => (p.mode || "RENTAL") === pricingTab)
                                                         .sort((a, b) => {
                                                             const order = { 'SPVOD': 1, 'EPVOD': 2, 'PVOD': 3, 'RVOD': 4, 'LIBRARY': 5 };
@@ -2051,18 +2073,19 @@
                                                             return (order[typeA] || 99) - (order[typeB] || 99);
                                                         })
                                                         .map((p, i) => {
-                                                            const realIndex = formData.pricingPolicy.indexOf(p);
+                                                            // 원본 배열에서의 실제 인덱스를 찾습니다 (삭제/수정용)
+                                                            const realIndex = (formData.pricingPolicy || []).indexOf(p);
                                                             
                                                             return (
                                                                 <tr key={realIndex}>
                                                                     <td className="p-2">
                                                                         <select 
                                                                             className="w-full border p-1.5 rounded" 
-                                                                            value={p.type} 
+                                                                            value={p.type || 'SPVOD'} 
                                                                             onChange={e=>updatePolicy(realIndex,'type',e.target.value)}
                                                                         >
                                                                             {['SPVOD', 'EPVOD', 'PVOD', 'RVOD', 'LIBRARY'].map(opt => {
-                                                                                const isSelected = formData.pricingPolicy.some((policy, idx) => 
+                                                                                const isSelected = (formData.pricingPolicy || []).some((policy, idx) => 
                                                                                     policy.mode === p.mode && 
                                                                                     policy.type === opt && 
                                                                                     idx !== realIndex
@@ -2076,13 +2099,13 @@
                                                                         </select>
                                                                     </td>
                                                                     <td className="p-2">
-                                                                        <input type="number" step="1000" className="w-full border p-1.5 rounded text-right" value={p.price} onChange={e=>updatePolicy(realIndex,'price',e.target.value)}/>
+                                                                        <input type="number" step="1000" className="w-full border p-1.5 rounded text-right" value={p.price || 0} onChange={e=>updatePolicy(realIndex,'price',e.target.value)}/>
                                                                     </td>
                                                                     <td className="p-2">
-                                                                        <input type="date" className="w-full border p-1.5 rounded" value={p.startDate} onChange={e=>updatePolicy(realIndex,'startDate',e.target.value)}/>
+                                                                        <input type="date" className="w-full border p-1.5 rounded" value={p.startDate || ''} onChange={e=>updatePolicy(realIndex,'startDate',e.target.value)}/>
                                                                     </td>
                                                                     <td className="p-2">
-                                                                        <input type="date" className="w-full border p-1.5 rounded" value={p.endDate} onChange={e=>updatePolicy(realIndex,'endDate',e.target.value)}/>
+                                                                        <input type="date" className="w-full border p-1.5 rounded" value={p.endDate || ''} onChange={e=>updatePolicy(realIndex,'endDate',e.target.value)}/>
                                                                     </td>
                                                                     <td className="p-2 text-center">
                                                                         <div className="flex items-center justify-center gap-1">
@@ -2091,17 +2114,15 @@
                                                                                 min="1"
                                                                                 placeholder="일수"
                                                                                 className="w-14 border p-1.5 rounded text-center text-xs focus:ring-2 focus:ring-indigo-200 outline-none"
-                                                                                /* 현재 설정된 시작일과 종료일 사이의 기간을 계산해 숫자로 보여줍니다. */
+                                                                                /* 날짜 계산 안전장치 추가 */
                                                                                 value={p.startDate && p.endDate && !p.endDate.startsWith('9999') ? 
-                                                                                    Math.ceil(Math.abs(new Date(p.endDate) - new Date(p.startDate)) / (1000 * 60 * 60 * 24)) + 1 : ''}
+                                                                                    (Math.ceil(Math.abs(new Date(p.endDate) - new Date(p.startDate)) / (1000 * 60 * 60 * 24)) + 1) || '' : ''}
                                                                                 onChange={(e) => {
                                                                                     const days = parseInt(e.target.value);
-                                                                                    // 숫자가 입력되면 시작일 기준으로 종료일을 자동 계산합니다.
                                                                                     if (!isNaN(days) && days > 0 && p.startDate) {
                                                                                         const calculatedEndDate = addDays(p.startDate, days - 1);
                                                                                         updatePolicy(realIndex, 'endDate', calculatedEndDate);
                                                                                     } else if (e.target.value === '') {
-                                                                                        // 입력칸을 비우면 다시 무제한(9999-12-31)으로 설정합니다.
                                                                                         updatePolicy(realIndex, 'endDate', '9999-12-31');
                                                                                     }
                                                                                 }}
@@ -2187,4 +2208,5 @@
     </script>
 </body>
 </html>
+
 
