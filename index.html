@@ -103,18 +103,7 @@
             } catch (e) { return null; }
         };
 
-        const addDays = (d, n) => { 
-            if(!d) return ''; 
-            const date = new Date(d); 
-            // 날짜가 유효하지 않으면 빈 문자열 반환 (여기서 에러가 나서 팝업이 하얗게 됨)
-            if (isNaN(date.getTime())) return ''; 
-            date.setDate(date.getDate() + n); 
-            try {
-                return date.toISOString().split('T')[0]; 
-            } catch (e) {
-                return '';
-            }
-        };
+        const addDays = (d, n) => { if(!d) return ''; const date = new Date(d); date.setDate(date.getDate() + n); return date.toISOString().split('T')[0]; };
         const addMonths = (d, n) => { if(!d) return ''; const date = new Date(d); date.setMonth(date.getMonth() + n); return date.toISOString().split('T')[0]; };
         const getNextTueOrFri = (d) => { 
             if(!d) return ''; const date = new Date(d); const day = date.getDay(); 
@@ -284,17 +273,16 @@
                 
                 if (Array.isArray(data)) {
                     data.forEach(item => {
-                        // String()으로 감싸서 강제로 문자열로 변환 후 trim()
-                        if (item.cp && item.cp !== '-') cpSet.add(String(item.cp).trim());
+                        if (item.cp && item.cp !== '-') cpSet.add(item.cp.trim());
                     });
                 }
                 
                 if (Array.isArray(requests)) {
                     requests.forEach(req => {
-                        if (req.cp) cpSet.add(String(req.cp).trim());
+                        if (req.cp) cpSet.add(req.cp.trim());
                     });
                 }
-            
+
                 return Array.from(cpSet).sort((a, b) => a.localeCompare(b));
             }, [data, requests]);
 
@@ -341,14 +329,8 @@
                 try {
                     const response = await fetch(targetUrl + "?type=history");
                     const json = await response.json();
-                    // [수정] 배열인지 확인하고, 아니면 빈 배열로 초기화하여 에러 방지
                     if (Array.isArray(json)) setHistory(json);
-                    else if (json && Array.isArray(json.data)) setHistory(json.data); // data 속성에 담겨올 경우 대비
-                    else setHistory([]); 
-                } catch (e) { 
-                    console.error("History Error", e); 
-                    setHistory([]); // 에러 발생 시 빈 화면 대신 빈 목록 표시
-                }
+                } catch (e) { console.error("History Error", e); }
             };
 
             const fetchRequests = async () => {
@@ -394,36 +376,30 @@
                 if (activeTab === 'requests') fetchRequests();
             }, [activeTab]);
 
-            // [수정] filteredRequests: 날짜 및 문자열 함수 사용 시 안전장치 강화
             const filteredRequests = useMemo(() => {
-                if (!Array.isArray(requests)) return []; // 배열 아니면 빈 배열 반환
-            
                 return requests.filter(req => {
-                    // 1. CP 필터 (안전하게 비교)
-                    if (reqFilterCp !== 'ALL' && String(req.cp || '') !== reqFilterCp) return false;
-                    
+                    // 1. CP 필터
+                    if (reqFilterCp !== 'ALL' && req.cp !== reqFilterCp) return false;
                     // 2. 카테고리 필터
                     if (!req.category || !reqFilterCategories.includes(req.category)) return false;
-                    
-                    // 3. 날짜 필터 (timestamp가 없거나 문자열 아니면 무시)
+                    // 3. 날짜 필터
                     if (reqStartDate || reqEndDate) {
-                        const ts = String(req.timestamp || '');
-                        if (ts.length < 10) return false; // 날짜 정보 불충분 시 제외
-                        
-                        const reqDate = ts.substring(0, 10);
+                        if (!req.timestamp) return false;
+                        const reqDate = req.timestamp.substring(0, 10);
                         if (reqStartDate && reqDate < reqStartDate) return false;
                         if (reqEndDate && reqDate > reqEndDate) return false;
                     }
                     
-                    // 4. 검색어 필터 (소문자 변환 전 문자열 변환 필수)
-                    const title = String(req.title || '').toLowerCase();
-                    const search = String(reqSearchTerm || '').toLowerCase();
+                    // 👉 [안전하게 수정된 검색 로직]
+                    // 제목이 없으면 빈 문자열('')로 취급해서 에러(toLowerCase fail)를 막습니다.
+                    const title = req.title ? String(req.title).toLowerCase() : "";
+                    const search = reqSearchTerm.toLowerCase();
                     
                     if (reqSearchTerm && !title.includes(search)) return false;
-            
+
                     return true;
                 });
-            }, [requests, reqFilterCp, reqFilterCategories, reqStartDate, reqEndDate, reqSearchTerm]);
+            }, [requests, reqFilterCp, reqFilterCategories, reqStartDate, reqEndDate, reqSearchTerm]); // reqSearchTerm 의존성 추가
 
             const handleLogin = async (e) => {
                 e.preventDefault(); setLoginError(null);
@@ -878,90 +854,108 @@
             };
 
             // ---------------------------------------------------------
-            // [2번 수정사항] 영화 선택 핸들러 (GAS 관객수 추적 + AI 수상 검색)
+            // [최종] 영화 선택 핸들러 (KOFIC 상세 데이터 우선 적용 로직)
             // ---------------------------------------------------------
             const handleSelectMovie = async (movie) => {
-                // 1. 목록 UI 정리
+                // 1. 목록 UI 닫기 및 로딩 표시
                 setShowCandidateList(false);
-                setKoficCandidates([]); // 검색 목록 초기화 (중요)
-                
-                showToast(`⏳ [${movie.title}] 데이터 분석 및 관객수 추적 중...`);
+                showToast(`⏳ [${movie.title}] 상세 정보(배우/등급)를 가져오는 중...`);
                 
                 const scriptUrl = localStorage.getItem('google_script_url') || DEFAULT_GOOGLE_SCRIPT_URL;
-        
+
                 try {
-                    // 2. GAS 백엔드 호출 (상세정보 + 박스오피스 추적)
+                    // =========================================================
+                    // STEP 1: GAS 백엔드에 상세 정보 요청 (kofic_movie_detail)
+                    // =========================================================
                     const detailUrl = `${scriptUrl}?type=kofic_movie_detail&movieCd=${movie.movieCd}`;
                     const detailRes = await fetch(detailUrl);
                     const detailJson = await detailRes.json();
-        
-                    // GAS에서 받은 데이터 초기화
+
+                    // 상세 정보 객체 초기화
                     let koficData = {
                         title: movie.title,
                         titleEn: movie.titleEn,
                         prodYear: movie.prodYear,
                         openDt: movie.openDt,
                         director: movie.director,
-                        actors: "", 
-                        audit: "",
-                        boxOffice: "" // GAS가 추적한 관객수 (예: "2,403,966명")
+                        actors: "", // 기본값 빈 문자열
+                        audit: ""
                     };
                     
+                    // GAS 통신 성공 시 데이터 덮어쓰기
                     if (detailJson.result === "success" && detailJson.data) {
                         koficData = { ...koficData, ...detailJson.data };
+                        console.log("✅ KOFIC 상세 데이터 수신:", koficData);
+                    } else {
+                        console.warn("⚠️ 상세 조회 실패, 목록 기본 정보 사용");
                     }
-        
-                    // 3. 데이터 적용 여부 판단
+
+                    // =========================================================
+                    // STEP 2: 영진위 데이터 우선 적용 (배우가 있으면 무조건 씀)
+                    // =========================================================
+                    
+                    // 배우 정보가 비어있는지 체크 (비어있으면 true)
                     const isActorMissing = !koficData.actors || koficData.actors.trim() === "";
-                    // GAS가 관객수를 찾아왔는지 확인 (0명이 아니고 빈값이 아니면 성공)
-                    const isBoxOfficeFound = koficData.boxOffice && koficData.boxOffice !== "0명" && koficData.boxOffice !== "";
-        
-                    // 기본 데이터 폼에 적용
+
                     const baseData = {
-                        // title: koficData.title, // (제목은 덮어쓰지 않고 유지)
                         originalTitle: koficData.titleEn || '',
                         prodYear: koficData.prodYear || '',
-                        actors: isActorMissing ? "" : koficData.actors,
-                        boxOffice: isBoxOfficeFound ? koficData.boxOffice : "", 
+                        
+                        // [핵심] 배우 정보가 있으면 영진위 데이터를 넣고, 없으면 일단 빈칸으로 둠
+                        actors: isActorMissing ? "" : koficData.actors, 
+                        
+                        // 관람 등급은 비고란에 자동 기입
                         remarks: koficData.audit ? `관람등급: ${koficData.audit}` : formData.remarks,
+                        
+                        // 날짜 포맷팅
                         btvPlusAvailableDate: koficData.openDt ? formatDateStandard(koficData.openDt) : formData.btvPlusAvailableDate,
+                        
+                        // 장르 기반 카테고리 자동 선택
                         category: koficData.genre ? (koficData.genre.includes("애니") ? "한국영화애니메이션" : "한국영화") : formData.category
                     };
-        
+
+                    // 폼에 즉시 반영 (여기서 배우 이름이 화면에 떠야 함)
                     setFormData(prev => ({ ...prev, ...baseData }));
                     
-                    // 4. AI 호출 (부족한 부분 + 수상 이력)
+                    
+                    // =========================================================
+                    // STEP 3: AI에게 부족한 정보(관객수, 수상)만 질문
+                    // =========================================================
                     setIsAiLoading(true);
                     
+                    let loadingMsg = "AI가 관객수와 수상 이력을 찾습니다...";
+                    if (isActorMissing) loadingMsg = "⚠️ 영진위 배우 정보 누락 -> AI가 배우 정보도 함께 찾습니다...";
+                    showToast(loadingMsg);
+
+                    // AI 프롬프트 작성
                     let promptRequest = `
                     영화 정보:
                     - 제목: ${koficData.title}
+                    - 원제: ${koficData.titleEn}
                     - 감독: ${koficData.director}
                     - 개봉년도: ${koficData.openDt ? koficData.openDt.substring(0,4) : koficData.prodYear}
                     
-                    명령: 위 영화 정보를 바탕으로 JSON 데이터를 찾아줘.
+                    명령: 위 영화는 이미 개봉한 영화다. 웹상의 정보를 바탕으로 다음 데이터를 JSON으로 찾아내라.
                     
-                    [요청 항목]
-                    1. "awards": 주요 영화제 수상 이력 (없으면 빈칸).
+                    [필수 항목]
+                    1. "boxOffice": 한국 공식 누적 관객수 (예: "12,345명" 또는 "약 25만명"). 
+                       - 정확한 수치를 모르면 뉴스나 위키를 참고해 추정치라도 적어라.
+                       - 정말 정보가 없으면 "0명"으로 표기.
+                    2. "awards": 주요 수상 이력 (없으면 빈칸)
                     `;
                     
-                    // 관객수 추적 실패 시에만 AI에게 요청
-                    if (!isBoxOfficeFound) {
-                        promptRequest += `\n2. "boxOffice": 한국 공식 누적 관객수 (정확한 수치, 없으면 '0명').`;
-                        showToast("⚠️ 관객수 추적 실패 -> AI가 다시 찾습니다...");
-                    } else {
-                        showToast("✅ 관객수 확인 완료! AI가 수상 이력을 찾습니다...");
-                    }
-        
+                    // [조건부] 영진위에 배우가 없었을 때만 AI에게 시킴
                     if (isActorMissing) {
-                        promptRequest += `\n3. "actors": 주연 배우 3명 (한국어).`;
+                        promptRequest += `\n3. "actors": 주연 배우 3명 (한국어 이름, 콤마로 구분). 반드시 찾아낼 것.`;
                     }
                     
-                    promptRequest += `\n\n응답은 오직 JSON 형식만 출력할 것.`;
-        
+                    promptRequest += `\n\n응답은 오직 JSON 형식만 출력할 것. (설명 금지)`;
+
+                    // AI 호출
                     const aiRes = await callGemini(promptRequest);
                     
                     if (!aiRes.error && aiRes.text) {
+                        // JSON 파싱
                         const cleanText = aiRes.text.replace(/```json|```/g, '').trim();
                         const firstBrace = cleanText.indexOf('{');
                         const lastBrace = cleanText.lastIndexOf('}');
@@ -969,17 +963,22 @@
                         if (firstBrace !== -1 && lastBrace !== -1) {
                             const jsonStr = cleanText.substring(firstBrace, lastBrace + 1);
                             const aiJson = JSON.parse(jsonStr);
-        
+
                             setFormData(prev => ({
                                 ...prev,
-                                // 기존 데이터 보존 우선, 없으면 AI 데이터 사용
-                                boxOffice: isBoxOfficeFound ? prev.boxOffice : (aiJson.boxOffice || "0명"),
-                                actors: isActorMissing ? (aiJson.actors || "") : prev.actors,
-                                awards: aiJson.awards || prev.awards
+                                boxOffice: aiJson.boxOffice || "0명",
+                                awards: aiJson.awards || prev.awards,
+                                // 배우가 누락되었던 경우에만 AI 데이터로 덮어쓰기 (영진위 데이터 보존)
+                                actors: isActorMissing ? (aiJson.actors || "") : prev.actors 
                             }));
-                            showToast("✨ 데이터 준비 완료!");
+                            showToast("✨ 데이터 보강 완료!");
+                        } else {
+                            console.warn("AI JSON Parsing Failed:", aiRes.text);
                         }
-                    } 
+                    } else {
+                        showToast("AI 응답 실패: " + (aiRes.error || "응답 없음"));
+                    }
+
                 } catch (e) {
                     console.error(e);
                     showToast("오류 발생: " + e.message);
@@ -987,93 +986,45 @@
                     setIsAiLoading(false);
                 }
             };
-            // ---------------------------------------------------------
-            // [3번 수정사항] 수상 이력 전용 AI 검색 핸들러
-            // ---------------------------------------------------------
-            const handleAiAwards = async (e) => {
-                e.preventDefault(); // 폼 전송 방지 (필수)
-                
-                if (!formData.title) {
-                    showToast("❌ 영화 제목이 없습니다.");
-                    return;
-                }
-        
-                setIsAiLoading(true);
-                showToast(`🏆 [${formData.title}] 수상 이력 검색 중...`);
-        
-                try {
-                    // 수상 이력에 집중한 프롬프트
-                    const prompt = `
-                    영화 정보:
-                    - 제목: ${formData.title}
-                    - 감독: ${formData.director || ""}
-                    - 개봉년도: ${formData.prodYear || ""}
-        
-                    명령: 위 영화의 "주요 영화제 수상 이력"을 한 문장으로 요약해줘.
-                    - 칸, 베니스, 베를린, 아카데미, 골든글로브, 청룡, 백상 등 주요 시상식 위주.
-                    - 수상 내역이 없으면 "수상 내역 없음" 이라고만 답해.
-                    - 예시: "2020 아카데미 작품상, 감독상, 각본상, 국제장편영화상 수상"
-                    `;
-        
-                    const aiRes = await callGemini(prompt);
-        
-                    if (!aiRes.error && aiRes.text) {
-                        // 따옴표나 불필요한 공백 제거
-                        const cleanText = aiRes.text.replace(/"/g, '').trim();
-                        
-                        setFormData(prev => ({
-                            ...prev,
-                            awards: cleanText
-                        }));
-                        showToast("✅ 수상 이력이 업데이트되었습니다.");
-                    } else {
-                        showToast("AI 응답 실패. 다시 시도해주세요.");
-                    }
-        
-                } catch (err) {
-                    console.error(err);
-                    showToast("오류 발생: " + err.message);
-                } finally {
-                    setIsAiLoading(false);
-                }
-            };
+
             const handleApproveRequest = (req) => {
                 let aiData = {};
-                // [수정] req.details가 없거나 문자열이 아닐 경우를 위한 강력한 방어 로직
-                const safeDetails = String(req.details || '');
-
                 try {
-                    if (safeDetails.trim().startsWith('{') || safeDetails.includes('```json')) {
-                        const jsonMatch = safeDetails.match(/\{[\s\S]*\}/);
+                    if (typeof req.details === 'string') {
+                        const jsonMatch = req.details.match(/\{[\s\S]*\}/);
                         if (jsonMatch) {
                             aiData = JSON.parse(jsonMatch[0]);
                         } else {
-                            const cleanJson = safeDetails.replace(/```json|```/g, '').trim();
+                            const cleanJson = req.details.replace(/```json|```/g, '').trim();
                             if (cleanJson.startsWith('{')) {
                                 aiData = JSON.parse(cleanJson);
                             }
                         }
+                    } else if (typeof req.details === 'object') {
+                        aiData = req.details;
                     }
                 } catch (e) { 
                     console.error("JSON Parsing Fail in Request:", e); 
                 }
 
-                // ... (이하 newForm 생성 로직은 그대로 두셔도 됩니다)
                 const newForm = {
                     ...initialForm,
                     title: aiData.title || req.title || '',
                     cp: aiData.cp || req.cp || '',
                     category: aiData.category || req.category || '한국영화',
+                    
                     originalTitle: aiData.originalTitle || '', 
                     prodYear: aiData.prodYear || '',
                     actors: aiData.actors || '',
                     awards: aiData.awards || '',
                     rating: aiData.rating || '',
                     boxOffice: aiData.boxOffice || '',
+
                     pricingPolicy: Array.isArray(aiData.pricingPolicy) ? aiData.pricingPolicy : [],
                     btvPlusStatus: aiData.btvPlusStatus || 'N',
                     btvPlusAvailableDate: aiData.btvPlusAvailableDate || '',
-                    remarks: aiData.remarks || (Object.keys(aiData).length > 0 ? '' : safeDetails)
+                    
+                    remarks: aiData.remarks || (Object.keys(aiData).length > 0 ? '' : req.details)
                 };
 
                 setFormData(newForm);
@@ -1699,9 +1650,7 @@
                                                             <span>장르: {req.category}</span>
                                                         </div>
                                                         <div className="mt-3 bg-gray-50 p-3 rounded text-sm text-gray-600 whitespace-pre-wrap truncate line-clamp-3">
-                                                            {String(req.details || '').length > 200 && String(req.details || '').includes('pricingPolicy') 
-                                                                ? "AI 분석 데이터 포함됨 (승인 시 확인 가능)" 
-                                                                : (req.details || '')}
+                                                            {req.details.length > 200 && req.details.includes('pricingPolicy') ? "AI 분석 데이터 포함됨 (승인 시 확인 가능)" : req.details}
                                                         </div>
                                                     </div>
                                                     <div className="flex md:flex-col gap-2 justify-center shrink-0">
@@ -1964,37 +1913,9 @@
                                                     placeholder="영진위 상세 정보가 자동 입력됩니다"
                                                 />
                                             </div>
-                                            {/* ▼▼▼ [교체할 코드] 수상 이력 입력 필드 + AI 버튼 ▼▼▼ */}
                                             <div className="md:col-span-2">
-                                                <label className="block text-sm font-bold mb-1 text-gray-700 flex justify-between items-end">
-                                                    <span>영화제 수상 이력</span>
-                                                    
-                                                    {/* 신규 추가된 AI 검색 버튼 */}
-                                                    <button
-                                                        onClick={handleAiAwards}
-                                                        disabled={isAiLoading}
-                                                        className="text-xs bg-indigo-50 text-indigo-600 px-2 py-1 rounded border border-indigo-200 hover:bg-indigo-100 transition flex items-center gap-1"
-                                                        title="이 영화의 수상 이력만 AI로 다시 검색합니다."
-                                                    >
-                                                        {isAiLoading ? (
-                                                            <span className="animate-spin">⌛</span> 
-                                                        ) : (
-                                                            <Icon name="Sparkles" size={12}/>
-                                                        )}
-                                                        AI 검색
-                                                    </button>
-                                                </label>
-                                                
-                                                <input 
-                                                    type="text" 
-                                                    name="awards" 
-                                                    value={formData.awards} 
-                                                    /* handleChange 함수가 있다면 아래 그대로 쓰시고, 
-                                                       만약 없어서 에러가 난다면 기존처럼 onChange={e=>setFormData({...formData, awards:e.target.value})} 로 바꾸세요. */
-                                                    onChange={handleChange} 
-                                                    className="w-full border p-2 rounded bg-yellow-50 focus:bg-white transition"
-                                                    placeholder="예: 2024 아카데미 각본상 수상"
-                                                />
+                                                <label className="block text-xs font-bold mb-1 text-gray-600">영화제 수상 이력 (AI 자동)</label>
+                                                <input className="w-full border p-2 rounded bg-yellow-50 focus:bg-white transition" value={formData.awards} onChange={e=>setFormData({...formData, awards:e.target.value})} placeholder="영화 선택 시 AI가 입력합니다"/>
                                             </div>
                                         </div>
                                     </section>
@@ -2031,45 +1952,79 @@
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y">
-                                                    {(formData.pricingPolicy || [])
+                                                    {formData.pricingPolicy
                                                         .filter(p => (p.mode || "RENTAL") === pricingTab)
                                                         .sort((a, b) => {
                                                             const order = { 'SPVOD': 1, 'EPVOD': 2, 'PVOD': 3, 'RVOD': 4, 'LIBRARY': 5 };
-                                                            // [수정] 값이 없을 경우 빈 문자열로 처리하여 toUpperCase() 에러 방지
-                                                            const typeA = String(a.type || '').toUpperCase();
-                                                            const typeB = String(b.type || '').toUpperCase();
-                                                            
+                                                            const typeA = (a.type || '').toUpperCase();
+                                                            const typeB = (b.type || '').toUpperCase();
                                                             if ((order[typeA] || 99) === (order[typeB] || 99)) {
-                                                                return String(a.startDate || '').localeCompare(String(b.startDate || ''));
+                                                                return (a.startDate || '').localeCompare(b.startDate || '');
                                                             }
                                                             return (order[typeA] || 99) - (order[typeB] || 99);
                                                         })
                                                         .map((p, i) => {
-                                                            const realIndex = (formData.pricingPolicy || []).indexOf(p);
+                                                            const realIndex = formData.pricingPolicy.indexOf(p);
+                                                            
                                                             return (
                                                                 <tr key={realIndex}>
-                                                                    {/* ... (td 내용들은 그대로 둠) ... */}
                                                                     <td className="p-2">
-                                                                        <select className="w-full border p-1.5 rounded" value={p.type} onChange={e=>updatePolicy(realIndex,'type',e.target.value)}>
+                                                                        <select 
+                                                                            className="w-full border p-1.5 rounded" 
+                                                                            value={p.type} 
+                                                                            onChange={e=>updatePolicy(realIndex,'type',e.target.value)}
+                                                                        >
                                                                             {['SPVOD', 'EPVOD', 'PVOD', 'RVOD', 'LIBRARY'].map(opt => {
-                                                                                // [수정] 옵션 선택 시에도 안전하게 접근
-                                                                                const isSelected = (formData.pricingPolicy || []).some((policy, idx) => 
-                                                                                    policy.mode === p.mode && policy.type === opt && idx !== realIndex
+                                                                                const isSelected = formData.pricingPolicy.some((policy, idx) => 
+                                                                                    policy.mode === p.mode && 
+                                                                                    policy.type === opt && 
+                                                                                    idx !== realIndex
                                                                                 );
-                                                                                return <option key={opt} value={opt} disabled={isSelected}>{opt}</option>;
+                                                                                return (
+                                                                                    <option key={opt} value={opt} disabled={isSelected}>
+                                                                                        {opt}
+                                                                                    </option>
+                                                                                );
                                                                             })}
                                                                         </select>
                                                                     </td>
-                                                                    <td className="p-2"><input type="number" step="1000" className="w-full border p-1.5 rounded text-right" value={p.price} onChange={e=>updatePolicy(realIndex,'price',e.target.value)}/></td>
-                                                                    <td className="p-2"><input type="date" className="w-full border p-1.5 rounded" value={p.startDate} onChange={e=>updatePolicy(realIndex,'startDate',e.target.value)}/></td>
-                                                                    <td className="p-2"><input type="date" className="w-full border p-1.5 rounded" value={p.endDate} onChange={e=>updatePolicy(realIndex,'endDate',e.target.value)}/></td>
-                                                                    <td className="p-2 text-center">
-                                                                        {/* 날짜 계산 시 안전장치 추가 */}
-                                                                        <input type="number" className="w-14 border p-1.5 rounded text-center text-xs" readOnly 
-                                                                            value={p.startDate && p.endDate && !p.endDate.startsWith('9999') ? Math.max(0, Math.ceil((new Date(p.endDate) - new Date(p.startDate)) / (1000 * 60 * 60 * 24)) + 1) : ''} 
-                                                                        />
+                                                                    <td className="p-2">
+                                                                        <input type="number" step="1000" className="w-full border p-1.5 rounded text-right" value={p.price} onChange={e=>updatePolicy(realIndex,'price',e.target.value)}/>
                                                                     </td>
-                                                                    <td className="p-2 text-center"><button onClick={()=>removePolicy(realIndex)} className="text-red-500 hover:text-red-700 font-bold">삭제</button></td>
+                                                                    <td className="p-2">
+                                                                        <input type="date" className="w-full border p-1.5 rounded" value={p.startDate} onChange={e=>updatePolicy(realIndex,'startDate',e.target.value)}/>
+                                                                    </td>
+                                                                    <td className="p-2">
+                                                                        <input type="date" className="w-full border p-1.5 rounded" value={p.endDate} onChange={e=>updatePolicy(realIndex,'endDate',e.target.value)}/>
+                                                                    </td>
+                                                                    <td className="p-2 text-center">
+                                                                        <div className="flex items-center justify-center gap-1">
+                                                                            <input 
+                                                                                type="number" 
+                                                                                min="1"
+                                                                                placeholder="일수"
+                                                                                className="w-14 border p-1.5 rounded text-center text-xs focus:ring-2 focus:ring-indigo-200 outline-none"
+                                                                                /* 현재 설정된 시작일과 종료일 사이의 기간을 계산해 숫자로 보여줍니다. */
+                                                                                value={p.startDate && p.endDate && !p.endDate.startsWith('9999') ? 
+                                                                                    Math.ceil(Math.abs(new Date(p.endDate) - new Date(p.startDate)) / (1000 * 60 * 60 * 24)) + 1 : ''}
+                                                                                onChange={(e) => {
+                                                                                    const days = parseInt(e.target.value);
+                                                                                    // 숫자가 입력되면 시작일 기준으로 종료일을 자동 계산합니다.
+                                                                                    if (!isNaN(days) && days > 0 && p.startDate) {
+                                                                                        const calculatedEndDate = addDays(p.startDate, days - 1);
+                                                                                        updatePolicy(realIndex, 'endDate', calculatedEndDate);
+                                                                                    } else if (e.target.value === '') {
+                                                                                        // 입력칸을 비우면 다시 무제한(9999-12-31)으로 설정합니다.
+                                                                                        updatePolicy(realIndex, 'endDate', '9999-12-31');
+                                                                                    }
+                                                                                }}
+                                                                            />
+                                                                            <span className="text-[10px] text-gray-400">일</span>
+                                                                        </div>
+                                                                    </td>
+                                                                    <td className="p-2 text-center">
+                                                                        <button onClick={()=>removePolicy(realIndex)} className="text-red-500 hover:text-red-700 font-bold">삭제</button>
+                                                                    </td>
                                                                 </tr>
                                                             );
                                                         })}
@@ -2145,5 +2100,9 @@
     </script>
 </body>
 </html>
+
+
+
+
 
 
