@@ -1201,15 +1201,6 @@
                 };
             };
             
-                const otherModePolicies = existingPolicies.filter(p => p.mode !== mode);
-                setFormData(prev => ({
-                    ...prev,
-                    ...btvUpdate, // 사용자가 승인했을 때만 데이터가 포함됨
-                    pricingPolicy: [...otherModePolicies, ...newPolicies]
-                }));
-                showToast(`📅 자동 스케줄링 완료`);
-            };
-            
             const updatePolicy = (i, f, v) => { 
                 const p = [...formData.pricingPolicy]; 
                 p[i][f] = v;
@@ -2121,6 +2112,7 @@
     </script>
 </body>
 </html>
+
 
 
 
