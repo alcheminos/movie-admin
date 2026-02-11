@@ -1945,47 +1945,58 @@
                                     {/* [2순위] 가격 정책 상세 - 세부 조정 및 소장 복사 */}
                                     <section>
                                         <div className="flex justify-between items-center mb-4">
-                                            <h4 className="font-bold text-lg flex items-center gap-2"><Icon name="DollarSign"/> 2. 가격 정책 상세</h4>
+                                            <h4 className="font-bold text-lg flex items-center gap-2 text-gray-800"><Icon name="DollarSign"/> 2. 가격 정책 상세</h4>
                                             {pricingTab === 'RENTAL' && (
-                                                <button onClick={copyRentalToPossession} className="text-xs bg-amber-50 text-amber-700 border border-amber-200 px-3 py-1.5 rounded-lg font-bold hover:bg-amber-100 transition flex items-center gap-1">
-                                                    <Icon name="Copy" size={14}/> 대여 일정을 소장으로 복사
+                                                <button onClick={copyRentalToPossession} className="text-[11px] bg-amber-50 text-amber-700 border border-amber-200 px-2 py-1 rounded-lg font-bold hover:bg-amber-100 transition flex items-center gap-1">
+                                                    <Icon name="Copy" size={12}/> 소장으로 복사
                                                 </button>
                                             )}
                                         </div>
                                         <div className="flex border-b mb-4">
-                                            <button onClick={()=>setPricingTab('RENTAL')} className={`px-6 py-2 font-bold text-sm border-b-2 ${pricingTab==='RENTAL'?'border-indigo-600 text-indigo-600':'border-transparent text-gray-400'}`}>대여(Rental)</button>
-                                            <button onClick={()=>setPricingTab('POSSESSION')} className={`px-6 py-2 font-bold text-sm border-b-2 ${pricingTab==='POSSESSION'?'border-indigo-600 text-indigo-600':'border-transparent text-gray-400'}`}>소장(Purchase)</button>
+                                            <button onClick={()=>setPricingTab('RENTAL')} className={`px-6 py-2 font-bold text-sm border-b-2 ${pricingTab==='RENTAL'?'border-indigo-600 text-indigo-600':'border-transparent text-gray-400'}`}>대여</button>
+                                            <button onClick={()=>setPricingTab('POSSESSION')} className={`px-6 py-2 font-bold text-sm border-b-2 ${pricingTab==='POSSESSION'?'border-indigo-600 text-indigo-600':'border-transparent text-gray-400'}`}>소장</button>
                                         </div>
-                                        <div className="border rounded-lg overflow-x-auto">
-                                            <table className="w-full text-sm text-left">
+                                        <div className="border rounded-lg overflow-x-auto bg-white custom-scrollbar">
+                                            <table className="w-full text-sm text-left min-w-[600px]"> {/* 최소 너비 확보로 찌그러짐 방지 */}
                                                 <thead className="bg-gray-50 text-gray-600">
                                                     <tr>
-                                                        <th className="p-3">유형</th><th className="p-3">가격</th><th className="p-3">시작일</th><th className="p-3">종료일</th><th className="p-3 text-center">기간</th><th className="p-3 text-center">삭제</th>
+                                                        <th className="p-3 w-1/4">유형</th>
+                                                        <th className="p-3 w-1/4">가격</th>
+                                                        <th className="p-3 w-1/4">시작일</th>
+                                                        <th className="p-3 w-1/4">종료일</th>
+                                                        <th className="p-3 text-center">삭제</th>
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y">
-                                                    {(formData.pricingPolicy || [])
-                                                        .filter(p => (p.mode || "RENTAL") === pricingTab)
-                                                        .map((p, i) => {
-                                                            const realIndex = formData.pricingPolicy.indexOf(p);
-                                                            return (
-                                                                <tr key={realIndex}>
-                                                                    <td className="p-2">
-                                                                        <select className="w-full border p-1.5 rounded" value={p.type} onChange={e=>updatePolicy(realIndex,'type',e.target.value)}>
-                                                                            {['SPVOD', 'EPVOD', 'PVOD', 'RVOD', 'LIBRARY'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                                                                        </select>
-                                                                    </td>
-                                                                    <td className="p-2"><input type="number" className="w-full border p-1.5 rounded text-right" value={p.price} onChange={e=>updatePolicy(realIndex,'price',e.target.value)}/></td>
-                                                                    <td className="p-2"><input type="date" className="w-full border p-1.5 rounded" value={p.startDate} onChange={e=>updatePolicy(realIndex,'startDate',e.target.value)}/></td>
-                                                                    <td className="p-2"><input type="date" className="w-full border p-1.5 rounded" value={p.endDate} onChange={e=>updatePolicy(realIndex,'endDate',e.target.value)}/></td>
-                                                                    <td className="p-2 text-center text-xs text-gray-500">{getDuration(p.startDate, p.endDate)}</td>
-                                                                    <td className="p-2 text-center"><button onClick={()=>removePolicy(realIndex)} className="text-red-500 font-bold">삭제</button></td>
-                                                                </tr>
-                                                            );
-                                                        })}
+                                                    {(formData.pricingPolicy || []).filter(p => (p.mode || "RENTAL") === pricingTab).map((p, i) => {
+                                                        const realIndex = formData.pricingPolicy.indexOf(p);
+                                                        return (
+                                                            <tr key={realIndex}>
+                                                                <td className="p-2">
+                                                                    <select className="w-full border p-2 rounded text-sm bg-white" value={p.type} onChange={e=>updatePolicy(realIndex,'type',e.target.value)}>
+                                                                        {['SPVOD', 'EPVOD', 'PVOD', 'RVOD', 'LIBRARY'].map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                                                                    </select>
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <input type="number" className="w-full border p-2 rounded text-right text-sm" value={p.price} onChange={e=>updatePolicy(realIndex,'price',e.target.value)}/>
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <input type="date" className="w-full border p-2 rounded text-sm" value={p.startDate} onChange={e=>updatePolicy(realIndex,'startDate',e.target.value)}/>
+                                                                </td>
+                                                                <td className="p-2">
+                                                                    <input type="date" className="w-full border p-2 rounded text-sm" value={p.endDate} onChange={e=>updatePolicy(realIndex,'endDate',e.target.value)}/>
+                                                                </td>
+                                                                <td className="p-2 text-center">
+                                                                    <button onClick={()=>removePolicy(realIndex)} className="text-red-500 hover:text-red-700 p-1">
+                                                                        <Icon name="Trash2" size={16}/>
+                                                                    </button>
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
                                                 </tbody>
                                             </table>
-                                            <button onClick={()=>addPolicy(pricingTab)} className="w-full py-3 bg-gray-50 text-indigo-600 font-bold text-sm border-t">+ 추가</button>
+                                            <button onClick={()=>addPolicy(pricingTab)} className="w-full py-3 bg-gray-50 text-indigo-600 font-bold text-sm border-t hover:bg-gray-100">+ 일정 수동 추가</button>
                                         </div>
                                     </section>
                     
@@ -1994,30 +2005,38 @@
                                     {/* [3순위] B tv+ 편성 정보 - 최종 단계 */}
                                     <section>
                                         <h4 className="font-bold text-lg flex items-center gap-2 mb-4 text-gray-800"><Icon name="Tv"/> 3. B tv+ 편성 정보</h4>
-                                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 flex flex-col md:flex-row items-start md:items-center gap-8 shadow-sm">
-                                            <div className="flex items-center gap-6">
-                                                <span className="text-sm font-bold text-gray-700">편성 여부:</span>
-                                                <div className="flex gap-4">
-                                                    <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
-                                                        <input type="radio" name="btvStatus" className="w-4 h-4 text-indigo-600" checked={formData.btvPlusStatus==='Y'} onChange={()=>setFormData({...formData, btvPlusStatus:'Y'})}/> Y
-                                                    </label>
-                                                    <label className="flex items-center gap-2 cursor-pointer text-sm font-medium text-gray-700">
-                                                        <input type="radio" name="btvStatus" className="w-4 h-4 text-indigo-600" checked={formData.btvPlusStatus==='N'} onChange={()=>setFormData({...formData, btvPlusStatus:'N', btvPlusAvailableDate:'', btvPlusActualDate:''})}/> N
-                                                    </label>
+                                        <div className="bg-gray-50 p-5 rounded-xl border border-gray-200 shadow-sm min-h-[90px] flex items-center">
+                                            <div className="flex flex-wrap items-center gap-x-10 gap-y-4 w-full">
+                                                {/* 편성 여부 (항상 노출) */}
+                                                <div className="flex items-center gap-4">
+                                                    <span className="text-sm font-bold text-gray-700 whitespace-nowrap">편성 여부</span>
+                                                    <div className="flex gap-4">
+                                                        <label className="flex items-center gap-2 cursor-pointer text-sm">
+                                                            <input type="radio" name="btvStatus" className="w-4 h-4 text-indigo-600" checked={formData.btvPlusStatus==='Y'} onChange={()=>setFormData({...formData, btvPlusStatus:'Y'})}/> Y
+                                                        </label>
+                                                        <label className="flex items-center gap-2 cursor-pointer text-sm">
+                                                            <input type="radio" name="btvStatus" className="w-4 h-4 text-indigo-600" checked={formData.btvPlusStatus==='N'} onChange={()=>setFormData({...formData, btvPlusStatus:'N', btvPlusAvailableDate:'', btvPlusActualDate:''})}/> N
+                                                        </label>
+                                                    </div>
                                                 </div>
+                                    
+                                                {/* Y일 때만 나타나는 날짜 정보 (옆으로 배치) */}
+                                                {formData.btvPlusStatus === 'Y' && (
+                                                    <div className="flex flex-wrap items-center gap-6 animate-in fade-in slide-in-from-left-2 duration-300">
+                                                        <div className="h-6 w-px bg-gray-300 hidden md:block"></div> {/* 구분선 */}
+                                                        
+                                                        <div className="flex items-center gap-3">
+                                                            <label className="text-sm font-bold text-gray-600 whitespace-nowrap">권리 시작일</label>
+                                                            <input type="date" className="border p-2 rounded bg-white text-sm focus:ring-1 ring-indigo-200 outline-none w-40" value={formData.btvPlusAvailableDate} onChange={e=>setFormData({...formData, btvPlusAvailableDate:e.target.value})}/>
+                                                        </div>
+                                    
+                                                        <div className="flex items-center gap-3">
+                                                            <label className="text-sm font-bold text-gray-600 whitespace-nowrap">편성 예정일</label>
+                                                            <input type="date" className="border p-2 rounded bg-white text-sm focus:ring-1 ring-indigo-200 outline-none w-40" value={formData.btvPlusActualDate} onChange={e=>setFormData({...formData, btvPlusActualDate:e.target.value})}/>
+                                                        </div>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {formData.btvPlusStatus === 'Y' && (
-                                                <div className="flex flex-wrap gap-6 border-l border-gray-300 pl-8">
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[11px] font-bold text-gray-600 uppercase">Avail (권리 시작일)</label>
-                                                        <input type="date" className="border p-1.5 rounded bg-white text-sm focus:ring-1 ring-indigo-100 outline-none" value={formData.btvPlusAvailableDate} onChange={e=>setFormData({...formData, btvPlusAvailableDate:e.target.value})}/>
-                                                    </div>
-                                                    <div className="flex flex-col gap-1">
-                                                        <label className="text-[11px] font-bold text-gray-600 uppercase">Live (편성 예정일)</label>
-                                                        <input type="date" className="border p-1.5 rounded bg-white text-sm focus:ring-1 ring-indigo-100 outline-none" value={formData.btvPlusActualDate} onChange={e=>setFormData({...formData, btvPlusActualDate:e.target.value})}/>
-                                                    </div>
-                                                </div>
-                                            )}
                                         </div>
                                     </section>
                     
@@ -2046,5 +2065,6 @@
     </script>
 </body>
 </html>
+
 
 
