@@ -755,6 +755,31 @@
                     showToast('삭제됨');
                 }
             };
+            const handleInlineDateUpdate = async (item, newDate) => {
+                if (!newDate || item.btvPlusActualDate === newDate) return;
+                
+                // 1. 서버에 보낼 데이터 패키지 구성 (메타데이터 포함)
+                const updatedItem = { 
+                    ...item, 
+                    btvPlusActualDate: newDate,
+                    lastModified: new Date().toLocaleString(),
+                    modifier: user?.email || 'Admin'
+                };
+                
+                // 2. 리액트 상태(State) 즉시 업데이트
+                setData(prev => prev.map(d => d.id === item.id ? updatedItem : d));
+                
+                // 3. 서버(Google Sheet)에 비동기 저장 요청
+                try {
+                    // 기존에 정의된 syncToSheet 함수를 그대로 사용합니다.
+                    await syncToSheet(updatedItem, 'UPDATE');
+                    addHistory('UPDATE', updatedItem.title, `목록에서 편성일 직접 수정: ${newDate}`);
+                    showToast('편성일이 저장되었습니다.');
+                } catch (e) {
+                    showToast('❌ 저장 중 오류가 발생했습니다.');
+                    console.error("Inline Update Error:", e);
+                }
+            };
             const addHistory = (action, target, details) => {
                 const targetUrl = googleScriptUrl && googleScriptUrl.startsWith("http") ? googleScriptUrl : DEFAULT_GOOGLE_SCRIPT_URL;
                 if (targetUrl) {
@@ -1559,11 +1584,20 @@
                                                                 <td className="p-4 text-gray-500 text-sm bg-indigo-50/10">
                                                                     {d.btvPlusAvailableDate || <span className="text-gray-300">-</span>}
                                                                 </td>
-                                                                <td className="p-4 text-sm bg-indigo-50/10">
-                                                                    {d.btvPlusStatus === 'Y' && !d.btvPlusActualDate ? (
-                                                                        <span className="text-red-500 font-bold text-xs bg-red-50 px-2 py-1 rounded animate-pulse">날짜 입력 필요</span>
+                                                                <td className="p-4 bg-indigo-50/10">
+                                                                    {d.btvPlusStatus === 'Y' ? (
+                                                                        <input 
+                                                                            type="date" 
+                                                                            className={`w-full p-1 rounded border text-xs transition-colors focus:ring-1 focus:ring-indigo-400 outline-none
+                                                                                ${!d.btvPlusActualDate 
+                                                                                    ? 'border-red-300 bg-red-50 text-red-600 font-bold' 
+                                                                                    : 'border-gray-200 bg-white text-gray-800'
+                                                                                }`}
+                                                                            value={d.btvPlusActualDate || ''}
+                                                                            onChange={(e) => handleInlineDateUpdate(d, e.target.value)} // 지점 A의 함수 호출
+                                                                        />
                                                                     ) : (
-                                                                        <span className="text-gray-800">{d.btvPlusActualDate || <span className="text-gray-300">-</span>}</span>
+                                                                        <div className="text-center text-gray-300 text-sm">-</div>
                                                                     )}
                                                                 </td>
                                                             
@@ -2143,6 +2177,7 @@
     </script>
 </body>
 </html>
+
 
 
 
