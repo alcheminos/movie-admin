@@ -1111,6 +1111,7 @@
                  showToast("요청 삭제됨");
             };
 
+            // --- [수정된 applyAutoHoldback 함수] ---
             const applyAutoHoldback = (baseDate, mode) => {
                 const cpName = (formData.cp || "").trim();
                 const existingPolicies = formData.pricingPolicy || [];
@@ -1119,13 +1120,14 @@
                 let effectiveBaseDate = baseDate;
                 if (spvodPolicy) {
                     if (!spvodPolicy.endDate || spvodPolicy.endDate === '9999-12-31') {
-                        alert("SPVOD의 종료일을 먼저 정확한 날짜로 입력해주세요."); return;
+                        alert("SPVOD의 종료일을 먼저 정확한 날짜로 입력해주세요."); 
+                        return;
                     }
                     effectiveBaseDate = addDays(spvodPolicy.endDate, 1);
                 }
                 if (!effectiveBaseDate) return;
             
-                // 1. 신규 VOD 가격 정책 미리 계산
+                // 1. VOD 가격 정책 미리 계산
                 let newPolicies = []; 
                 let btvBaseDate = '';
                 if (spvodPolicy) {
@@ -1152,38 +1154,36 @@
                     btvBaseDate = pvStart;
                 }
             
-                // 2. [핵심] B tv+ 편성 정보 덮어쓰기 여부 로직
+                // 2. B tv+ 편성 정보 업데이트 여부 결정
                 let btvUpdate = {};
                 const hasExistingBtv = formData.btvPlusAvailableDate || formData.btvPlusActualDate;
             
                 if (hasExistingBtv) {
-                    // 기존 정보가 있는 경우 선택형 질문
                     const choice = confirm(
                         "⚠️ 이미 B tv+ 편성 정보가 입력되어 있습니다.\n\n" +
                         "[확인] : VOD 정책 + B tv+ 정보 모두 자동 계산 (덮어쓰기)\n" +
                         "[취소] : VOD 정책만 업데이트 (기존 B tv+ 정보 유지)"
                     );
-                    
                     if (choice) {
-                        // 모두 업데이트
                         btvUpdate = calculateBtvDates(cpName, btvBaseDate, newPolicies);
                     }
                 } else {
-                    // 기존 정보가 없는 경우엔 편하게 모두 생성할지 단순 질문
                     if (confirm("VOD 스케줄에 맞춰 'B tv+ 편성 날짜'도 함께 자동 계산하시겠습니까?")) {
                         btvUpdate = calculateBtvDates(cpName, btvBaseDate, newPolicies);
                     }
                 }
             
+                // 3. 상태 업데이트 (중복 코드 제거)
+                const otherModePolicies = existingPolicies.filter(p => p.mode !== mode);
                 setFormData(prev => ({
                     ...prev,
-                    ...btvUpdate, // 승인 시에만 데이터 포함, 미승인 시 기존 값 유지
-                    pricingPolicy: [...existingPolicies.filter(p => p.mode !== mode), ...newPolicies]
+                    ...btvUpdate,
+                    pricingPolicy: [...otherModePolicies, ...newPolicies]
                 }));
                 showToast(`📅 스케줄 업데이트 완료`);
             };
             
-            // B tv+ 날짜 계산 보조 함수 (로직 중복 방지)
+            // --- [수정된 calculateBtvDates 보조 함수] ---
             const calculateBtvDates = (cpName, btvBaseDate, newPolicies) => {
                 let availDate = btvBaseDate;
                 if (cpName.includes("스튜디오산타")) {
@@ -2121,6 +2121,7 @@
     </script>
 </body>
 </html>
+
 
 
 
