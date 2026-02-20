@@ -876,7 +876,7 @@
 
                 prompt += `\n\n[중요] 응답은 오직 JSON만 출력할 것.`;
 
-                // 3. AI 호출
+               // 3. AI 호출
                 const res = await callGemini(prompt);
                 
                 if (res.error) {
@@ -884,17 +884,30 @@
                 } else {
                     try {
                         let json = {};
-                        // JSON 파싱 시도
                         const text = res.text || "";
-                        const jsonMatch = text.match(/\{[\s\S]*\}/);
+                        
+                        // [보완 1] 마크다운 코드블록 찌꺼기(```json) 완벽 제거
+                        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                        
+                        // [보완 2] {} 구조 추출
+                        const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
                         if (jsonMatch) {
-                            json = JSON.parse(jsonMatch[0]);
+                            // [보완 3] 혹시 모를 쉼표(Trailing Comma) 에러 방지
+                            let safeJsonStr = jsonMatch[0].replace(/,\s*([}\]])/g, '$1'); 
                             
-                            // 데이터 병합 (기존 데이터 덮어쓰지 않도록 주의)
+                            json = JSON.parse(safeJsonStr);
+                            
+                            // 🔥 [핵심 보완] 배우 이름이 배열([])로 온 경우 문자열로 합쳐주기
+                            let parsedActors = json.actors;
+                            if (Array.isArray(parsedActors)) {
+                                parsedActors = parsedActors.join(", "); // ["A", "B"] -> "A, B"
+                            }
+
+                            // 데이터 병합
                             setFormData(prev => ({ 
                                 ...prev, 
                                 awards: json.awards || prev.awards,
-                                actors: needActors ? (json.actors || prev.actors) : prev.actors,
+                                actors: needActors ? (parsedActors || prev.actors) : prev.actors,
                                 boxOffice: needBoxOffice ? (json.boxOffice || prev.boxOffice) : prev.boxOffice
                             }));
                             
@@ -2177,6 +2190,7 @@
     </script>
 </body>
 </html>
+
 
 
 
