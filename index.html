@@ -883,41 +883,48 @@
                     alert("AI 통신 오류: " + res.error);
                 } else {
                     try {
-                        let json = {};
                         const text = res.text || "";
+                        console.log("🤖 AI 원본 응답:", text); // 개발자도구 확인용
                         
-                        // [보완 1] 마크다운 코드블록 찌꺼기(```json) 완벽 제거
-                        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+                        // 1. 마크다운 찌꺼기 제거 (대소문자 무시)
+                        const cleanText = text.replace(/```json/gi, '').replace(/```/g, '').trim();
                         
-                        // [보완 2] {} 구조 추출
+                        // 2. 괄호 {} 부분만 정확히 추출
                         const jsonMatch = cleanText.match(/\{[\s\S]*\}/);
+                        
                         if (jsonMatch) {
-                            // [보완 3] 혹시 모를 쉼표(Trailing Comma) 에러 방지
-                            let safeJsonStr = jsonMatch[0].replace(/,\s*([}\]])/g, '$1'); 
+                            let safeJsonStr = jsonMatch[0];
+                            let parsedData = {};
                             
-                            json = JSON.parse(safeJsonStr);
-                            
-                            // 🔥 [핵심 보완] 배우 이름이 배열([])로 온 경우 문자열로 합쳐주기
-                            let parsedActors = json.actors;
-                            if (Array.isArray(parsedActors)) {
-                                parsedActors = parsedActors.join(", "); // ["A", "B"] -> "A, B"
+                            // 🔥 [핵심 방어] 깐깐한 JSON.parse가 실패해도 강제로 읽어내는 마법의 코드
+                            try {
+                                parsedData = JSON.parse(safeJsonStr);
+                            } catch (parseError) {
+                                console.warn("표준 파싱 실패, 유연한 파싱 시도...");
+                                parsedData = new Function("return " + safeJsonStr)();
                             }
-
-                            // 데이터 병합
+                            
+                            // 3. 배우 이름이 배열 [ ] 로 오면 문자열로 합치기
+                            let finalActors = parsedData.actors;
+                            if (Array.isArray(finalActors)) {
+                                finalActors = finalActors.join(", ");
+                            }
+                            
+                            // 4. 필드 매핑 및 업데이트 (필드명 완벽 일치)
                             setFormData(prev => ({ 
                                 ...prev, 
-                                awards: json.awards || prev.awards,
-                                actors: needActors ? (parsedActors || prev.actors) : prev.actors,
-                                boxOffice: needBoxOffice ? (json.boxOffice || prev.boxOffice) : prev.boxOffice
+                                awards: parsedData.awards || prev.awards,
+                                actors: needActors ? (finalActors || prev.actors) : prev.actors,
+                                boxOffice: needBoxOffice ? (parsedData.boxOffice || prev.boxOffice) : prev.boxOffice
                             }));
                             
                             showToast("✨ AI 데이터 보완 완료!");
                         } else {
-                            throw new Error("JSON 형식 아님");
+                            throw new Error("JSON 형식을 찾을 수 없습니다.");
                         }
                     } catch (e) {
-                        console.error("AI Parse Error:", e);
-                        showToast("⚠️ AI 응답 분석 실패. 다시 시도해주세요.");
+                        console.error("AI 파싱 최종 에러:", e);
+                        showToast(`⚠️ 파싱 실패: 데이터를 읽을 수 없습니다.`);
                     }
                 }
                 setIsAiLoading(false);
@@ -2190,6 +2197,7 @@
     </script>
 </body>
 </html>
+
 
 
 
